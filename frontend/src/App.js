@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -17,8 +17,11 @@ export default function App() {
   const [submissionStatus, setSubmissionStatus] = useState('draft');
   // Per-question answers: { [questionId]: { extractedText, imageUrl } }
   const [answersByQid, setAnswersByQid] = useState({});
+  // Per-question save status: idle|saving|saved|error
+  const [saveStatusByQid, setSaveStatusByQid] = useState({});
   const [evaluation, setEvaluation] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const saveTimersRef = useRef({});
 
   function selectedExamObj() {
     return exams.find(e => e._id === selectedExam);
@@ -29,6 +32,7 @@ export default function App() {
     if (!file) return;
     setOcrLoading(true);
     try {
+      await ensureDraft();
       const form = new FormData();
       form.append('file', file);
       const r = await fetch(`${API}/api/ocr/extract`, { method: 'POST', body: form });
@@ -38,6 +42,7 @@ export default function App() {
           ...prev,
           [qid]: { ...(prev[qid] || {}), extractedText: j.text, imageUrl: j.imageUrl },
         }));
+        scheduleSave(qid);
       } else alert(j.error);
     } finally {
       setOcrLoading(false);
@@ -87,13 +92,26 @@ export default function App() {
     if (j.ok) { setSubmissionId(j.submission._id); setSubmissionStatus(j.submission.status); } else alert(j.error);
   }
 
+  async function ensureDraft() {
+    if (!submissionId) {
+      await startDraft();
+    }
+  }
+
   async function saveAnswer(qid) {
     if (!submissionId) return alert('Start a draft first');
     const entry = answersByQid[qid] || {};
     const payload = { questionId: qid, extractedText: entry.extractedText || '', answerImage: entry.imageUrl || '' };
+    setSaveStatusByQid(prev => ({ ...prev, [qid]: 'saving' }));
     const r = await fetch(`${API}/api/draft/${submissionId}/answer`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const j = await r.json();
-    if (j.ok) { setSubmissionStatus(j.submission.status); } else alert(j.error);
+    if (j.ok) {
+      setSubmissionStatus(j.submission.status);
+      setSaveStatusByQid(prev => ({ ...prev, [qid]: 'saved' }));
+    } else {
+      setSaveStatusByQid(prev => ({ ...prev, [qid]: 'error' }));
+      alert(j.error);
+    }
   }
 
   async function finalizeDraft() {
@@ -102,6 +120,25 @@ export default function App() {
     const j = await r.json();
     if (j.ok) { setSubmissionStatus(j.submission.status); } else alert(j.error);
   }
+
+  function scheduleSave(qid) {
+    if (submissionStatus !== 'draft') return; // don't autosave if finalized
+    // clear previous timer
+    const timers = saveTimersRef.current;
+    if (timers[qid]) clearTimeout(timers[qid]);
+    setSaveStatusByQid(prev => ({ ...prev, [qid]: 'saving' }));
+    timers[qid] = setTimeout(async () => {
+      await ensureDraft();
+      await saveAnswer(qid);
+    }, 700);
+  }
+
+  useEffect(() => {
+    return () => {
+      const timers = saveTimersRef.current;
+      Object.values(timers).forEach(t => clearTimeout(t));
+    };
+  }, []);
 
   async function evaluateSubmission() {
     if (!submissionId) return alert('Create a submission first');
@@ -171,13 +208,21 @@ export default function App() {
                   rows={3}
                   style={{ width: '100%', marginTop: 8 }}
                   value={answersByQid[q._id]?.extractedText || ''}
-                  onChange={(e) => setAnswersByQid(prev => ({ ...prev, [q._id]: { ...(prev[q._id] || {}), extractedText: e.target.value } }))}
+                  onChange={(e) => {
+                    setAnswersByQid(prev => ({ ...prev, [q._id]: { ...(prev[q._id] || {}), extractedText: e.target.value } }));
+                    scheduleSave(q._id);
+                  }}
                 />
                 {answersByQid[q._id]?.imageUrl && (
                   <div style={{ marginTop: 6, fontSize: 12, color: '#4b5563' }}>Image: {answersByQid[q._id].imageUrl}</div>
                 )}
                 <div style={{ marginTop: 8 }}>
                   <button onClick={() => saveAnswer(q._id)} disabled={!submissionId}>Save Answer</button>
+                  <span style={{ marginLeft: 8, fontSize: 12, color: '#4b5563' }}>
+                    {saveStatusByQid[q._id] === 'saving' && 'Saving…'}
+                    {saveStatusByQid[q._id] === 'saved' && 'Saved'}
+                    {saveStatusByQid[q._id] === 'error' && 'Error saving'}
+                  </span>
                 </div>
               </div>
             ))}
