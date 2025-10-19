@@ -17,6 +17,22 @@ export default function App() {
   const [submissionId, setSubmissionId] = useState('');
   const [studentAnswer, setStudentAnswer] = useState('');
   const [evaluation, setEvaluation] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+
+  async function ocrUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrLoading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const r = await fetch(`${API}/api/ocr/extract`, { method: 'POST', body: form });
+      const j = await r.json();
+      if (j.ok) setStudentAnswer(j.text); else alert(j.error);
+    } finally {
+      setOcrLoading(false);
+    }
+  }
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -117,6 +133,10 @@ export default function App() {
 
       <section className="mt-4">
         <h2 className="font-bold">Submission & Evaluation</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <input type="file" accept="image/*" onChange={ocrUpload} />
+          {ocrLoading && <span>OCR extracting…</span>}
+        </div>
         <textarea placeholder="Student answer (extracted text)" value={studentAnswer} onChange={e => setStudentAnswer(e.target.value)} rows={4} style={{ width: '100%' }} />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <button onClick={createSubmission} disabled={!selectedExam}>Create Submission</button>
