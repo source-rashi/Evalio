@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const Exam = require('../models/Exam');
 const Question = require('../models/Question');
+const auth = require('../middleware/auth');
 
-router.post('/create', async (req, res) => {
+router.post('/create', auth, async (req, res) => {
   try {
-    const exam = new Exam(req.body);
+    const payload = { ...req.body, teacher_id: req.user.id };
+    const exam = new Exam(payload);
     await exam.save();
     res.json({ ok: true, exam });
   } catch (err) {
