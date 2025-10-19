@@ -8,8 +8,9 @@ const { gradeAnswer } = require('../services/grading');
 // Evaluate a submission by id (placeholder - integrate AI here)
 router.post('/:submissionId', async (req, res) => {
   try {
-    const submission = await Submission.findById(req.params.submissionId).populate('answers.questionId');
+  const submission = await Submission.findById(req.params.submissionId).populate('answers.questionId');
     if (!submission) return res.status(404).json({ ok: false, error: 'Not found' });
+  if (submission.status === 'draft') return res.status(400).json({ ok: false, error: 'Finalize submission before evaluation' });
 
     const qIds = submission.answers.map(a => a.questionId?._id).filter(Boolean);
     const qDocs = await Question.find({ _id: { $in: qIds } });

@@ -14,6 +14,7 @@ export default function App() {
   const [qMarks, setQMarks] = useState(5);
   const [qModelAns, setQModelAns] = useState('');
   const [submissionId, setSubmissionId] = useState('');
+  const [submissionStatus, setSubmissionStatus] = useState('draft');
   // Per-question answers: { [questionId]: { extractedText, imageUrl } }
   const [answersByQid, setAnswersByQid] = useState({});
   const [evaluation, setEvaluation] = useState(null);
@@ -79,21 +80,27 @@ export default function App() {
     await listExams();
   }
 
-  async function createSubmission() {
+  async function startDraft() {
     if (!selectedExam) return alert('Select exam');
-    const qList = selectedExamObj()?.questions || [];
-    const answers = qList
-      .map(q => {
-        const entry = answersByQid[q._id] || {};
-        if (!entry.extractedText && !entry.imageUrl) return null;
-        return { questionId: q._id, extractedText: entry.extractedText || '', answerImage: entry.imageUrl || '' };
-      })
-      .filter(Boolean);
-    if (answers.length === 0) return alert('Add at least one answer (text or OCR)');
-    const payload = { exam_id: selectedExam, answers };
-    const r = await fetch(`${API}/api/submission/upload`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const r = await fetch(`${API}/api/draft/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exam_id: selectedExam }) });
     const j = await r.json();
-    if (j.ok) setSubmissionId(j.submission._id); else alert(j.error);
+    if (j.ok) { setSubmissionId(j.submission._id); setSubmissionStatus(j.submission.status); } else alert(j.error);
+  }
+
+  async function saveAnswer(qid) {
+    if (!submissionId) return alert('Start a draft first');
+    const entry = answersByQid[qid] || {};
+    const payload = { questionId: qid, extractedText: entry.extractedText || '', answerImage: entry.imageUrl || '' };
+    const r = await fetch(`${API}/api/draft/${submissionId}/answer`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (j.ok) { setSubmissionStatus(j.submission.status); } else alert(j.error);
+  }
+
+  async function finalizeDraft() {
+    if (!submissionId) return alert('Start a draft first');
+    const r = await fetch(`${API}/api/draft/${submissionId}/finalize`, { method: 'POST' });
+    const j = await r.json();
+    if (j.ok) { setSubmissionStatus(j.submission.status); } else alert(j.error);
   }
 
   async function evaluateSubmission() {
@@ -169,6 +176,9 @@ export default function App() {
                 {answersByQid[q._id]?.imageUrl && (
                   <div style={{ marginTop: 6, fontSize: 12, color: '#4b5563' }}>Image: {answersByQid[q._id].imageUrl}</div>
                 )}
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={() => saveAnswer(q._id)} disabled={!submissionId}>Save Answer</button>
+                </div>
               </div>
             ))}
           </div>
@@ -176,9 +186,10 @@ export default function App() {
           <div style={{ color: '#6b7280' }}>Select an exam with questions to add answers.</div>
         )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button onClick={createSubmission} disabled={!selectedExam}>Create Submission</button>
-          <span>Submission ID: {submissionId}</span>
-          <button onClick={evaluateSubmission} disabled={!submissionId}>Evaluate</button>
+          <button onClick={startDraft} disabled={!selectedExam || submissionId}>Start Draft</button>
+          <span>Submission ID: {submissionId} ({submissionStatus})</span>
+          <button onClick={finalizeDraft} disabled={!submissionId || submissionStatus !== 'draft'}>Finalize</button>
+          <button onClick={evaluateSubmission} disabled={!submissionId || submissionStatus !== 'finalized'}>Evaluate</button>
         </div>
         {evaluation && (
           <pre style={{ background: '#f3f4f6', padding: 12, borderRadius: 8, marginTop: 8 }}>
