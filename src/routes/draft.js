@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Submission = require('../models/Submission');
-const auth = require('../middleware/auth');
+const { extractTextFromImage } = require('../services/ocr');
+// const auth = require('../middleware/auth');
 
 // POST /api/draft/start { exam_id }
 router.post('/start', async (req, res) => {
@@ -41,6 +42,17 @@ router.post('/:id/finalize', async (req, res) => {
     const s = await Submission.findById(req.params.id);
     if (!s) return res.status(404).json({ ok: false, error: 'Draft not found' });
     if (s.status !== 'draft') return res.status(400).json({ ok: false, error: 'Already finalized' });
+    // Auto-OCR for any answers with image but missing text
+    for (const ans of s.answers) {
+      if ((!ans.extractedText || !ans.extractedText.trim()) && ans.answerImage) {
+        try {
+          const text = await extractTextFromImage(ans.answerImage);
+          ans.extractedText = text;
+        } catch {
+          // ignore OCR errors and continue
+        }
+      }
+    }
     s.status = 'finalized';
     await s.save();
     res.json({ ok: true, submission: s });

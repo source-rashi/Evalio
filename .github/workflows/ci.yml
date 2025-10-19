@@ -21,6 +21,8 @@ jobs:
           cache: 'npm'
       - name: Install backend deps
         run: npm ci
+      - name: Lint
+        run: npm run lint
       - name: Run unit tests
         run: npm test --silent
 
