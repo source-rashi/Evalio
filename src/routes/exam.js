@@ -15,7 +15,7 @@ router.post('/create', auth, async (req, res) => {
   }
 });
 
-router.post('/question/add', async (req, res) => {
+router.post('/question/add', auth, async (req, res) => {
   try {
     const q = new Question(req.body);
     await q.save();
