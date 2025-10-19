@@ -31,9 +31,11 @@ What I scaffolded
 - Basic Express server with Mongoose models for Teacher, Student, Exam, Question, Submission, Evaluation.
 - Authentication stubs (JWT).
 - API endpoints described in the project spec.
+- AI grading service with support for OpenAI or Gemini, falling back to a heuristic scorer.
 - Minimal React app (create-react-app style) under `frontend/`.
 
 Next steps
 ----------
-- Add AI integrations (OpenAI/Google Vision) keys and implement OCR / grading controllers.
+- Configure AI provider in `.env` (AI_PROVIDER=openai|gemini|none) and set `OPENAI_KEY` or `GEMINI_API_KEY`.
+- Add OCR integration (Cloudinary + Google Vision) to populate `extractedText`.
 - Add tests, CI, and deployment workflows.

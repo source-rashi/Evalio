@@ -3,7 +3,7 @@ const router = express.Router();
 const Submission = require('../models/Submission');
 const Evaluation = require('../models/Evaluation');
 const Question = require('../models/Question');
-const { scoreAnswer } = require('../utils/scoring');
+const { gradeAnswer } = require('../services/grading');
 
 // Evaluate a submission by id (placeholder - integrate AI here)
 router.post('/:submissionId', async (req, res) => {
@@ -15,14 +15,15 @@ router.post('/:submissionId', async (req, res) => {
     const qDocs = await Question.find({ _id: { $in: qIds } });
     const qMap = new Map(qDocs.map(q => [String(q._id), q]));
 
-    const results = submission.answers.map(a => {
+    const results = [];
+    for (const a of submission.answers) {
       const q = qMap.get(String(a.questionId?._id || a.questionId));
-      const max = q?.marks ?? 5;
+      const max = Math.min(5, q?.marks ?? 5);
       const model = q?.modelAnswer || '';
       const student = a.extractedText || '';
-      const r = scoreAnswer(model, student, Math.min(5, max));
-      return { questionId: a.questionId, score: r.score, feedback: r.feedback };
-    });
+      const r = await gradeAnswer({ modelAnswer: model, studentAnswer: student, maxScore: max });
+      results.push({ questionId: a.questionId, score: r.score, feedback: r.feedback });
+    }
     const totalScore = results.reduce((sum, r) => sum + (r.score || 0), 0);
     const evalDoc = new Evaluation({ submission_id: submission._id, results, totalScore });
     await evalDoc.save();
