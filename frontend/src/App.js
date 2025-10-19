@@ -13,6 +13,7 @@ export default function App() {
   const [qText, setQText] = useState('');
   const [qMarks, setQMarks] = useState(5);
   const [qModelAns, setQModelAns] = useState('');
+  const [qKeypoints, setQKeypoints] = useState([{ text: '', weight: 1 }]);
   const [submissionId, setSubmissionId] = useState('');
   const [submissionStatus, setSubmissionStatus] = useState('draft');
   // Per-question answers: { [questionId]: { extractedText, imageUrl } }
@@ -91,13 +92,19 @@ export default function App() {
     if (j.ok) setExams(j.exams); else alert(j.error);
   }
 
+  function normalizeKeypoints(arr) {
+    return (arr || [])
+      .map(k => ({ text: (k.text || '').trim(), weight: Number(k.weight || 1) }))
+      .filter(k => k.text);
+  }
+
   async function addQuestion() {
     if (!selectedExam) return alert('Select exam');
-    const payload = { text: qText, marks: Number(qMarks), modelAnswer: qModelAns, exam_id: selectedExam };
+    const payload = { text: qText, marks: Number(qMarks), modelAnswer: qModelAns, keypoints: normalizeKeypoints(qKeypoints), exam_id: selectedExam };
     const r = await fetch(`${API}/api/exam/question/add`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeader }, body: JSON.stringify(payload) });
     const j = await r.json();
     if (!j.ok) return alert(j.error);
-    setQText(''); setQMarks(5); setQModelAns('');
+    setQText(''); setQMarks(5); setQModelAns(''); setQKeypoints([{ text: '', weight: 1 }]);
     await listExams();
   }
 
@@ -204,11 +211,45 @@ export default function App() {
             <input placeholder="Question text" value={qText} onChange={e => setQText(e.target.value)} />
             <input placeholder="Marks" type="number" value={qMarks} onChange={e => setQMarks(e.target.value)} />
             <input placeholder="Model answer" value={qModelAns} onChange={e => setQModelAns(e.target.value)} />
+            <div style={{ width: '100%', marginTop: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Keypoints (optional)</div>
+              {qKeypoints.map((kp, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+                  <input
+                    placeholder={`Keypoint #${idx + 1}`}
+                    value={kp.text}
+                    onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, text: e.target.value } : k))}
+                    style={{ flex: 1 }}
+                  />
+                  <input
+                    placeholder="Weight"
+                    type="number"
+                    value={kp.weight}
+                    min={0}
+                    onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, weight: e.target.value } : k))}
+                    style={{ width: 100 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQKeypoints(prev => prev.filter((_, i) => i !== idx))}
+                    disabled={qKeypoints.length === 1}
+                  >Remove</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setQKeypoints(prev => [...prev, { text: '', weight: 1 }])}>+ Add keypoint</button>
+            </div>
             <button onClick={addQuestion} disabled={!token || !selectedExam}>Add Question</button>
           </div>
           <ul>
             {exams.find(x => x._id === selectedExam)?.questions?.map(q => (
-              <li key={q._id}>{q.text} (marks: {q.marks})</li>
+              <li key={q._id}>
+                {q.text} (marks: {q.marks})
+                {Array.isArray(q.keypoints) && q.keypoints.length > 0 && (
+                  <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
+                    Keypoints: {q.keypoints.map(kp => `${kp.text}(${kp.weight ?? 1})`).join(', ')}
+                  </div>
+                )}
+              </li>
             ))}
           </ul>
         </div>
