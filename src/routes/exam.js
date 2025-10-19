@@ -15,6 +15,16 @@ router.post('/create', auth, async (req, res) => {
   }
 });
 
+// List exams for current teacher
+router.get('/list', auth, async (req, res) => {
+  try {
+    const exams = await Exam.find({ teacher_id: req.user.id }).populate('questions');
+    res.json({ ok: true, exams });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/question/add', auth, async (req, res) => {
   try {
     const q = new Question(req.body);
@@ -24,6 +34,17 @@ router.post('/question/add', auth, async (req, res) => {
       await Exam.findByIdAndUpdate(req.body.exam_id, { $push: { questions: q._id } });
     }
     res.json({ ok: true, question: q });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// Get questions for an exam
+router.get('/:examId/questions', auth, async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.examId).populate('questions');
+    if (!exam) return res.status(404).json({ ok: false, error: 'Exam not found' });
+    res.json({ ok: true, questions: exam.questions });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
