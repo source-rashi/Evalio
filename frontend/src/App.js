@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 export default function App() {
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -22,6 +22,14 @@ export default function App() {
   const [evaluation, setEvaluation] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const saveTimersRef = useRef({});
+  const [submissionsList, setSubmissionsList] = useState([]);
+
+  async function loadSubmissions() {
+    if (!selectedExam || !token) return;
+    const r = await fetch(`${API}/api/teacher/submissions?examId=${selectedExam}`, { headers: { ...authHeader } });
+    const j = await r.json();
+    if (j.ok) setSubmissionsList(j.submissions); else alert(j.error);
+  }
 
   function selectedExamObj() {
     return exams.find(e => e._id === selectedExam);
@@ -50,6 +58,14 @@ export default function App() {
   }
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
+  useEffect(() => {
+    if (token) localStorage.setItem('token', token); else localStorage.removeItem('token');
+  }, [token]);
+
+  function logout() {
+    setToken('');
+  }
 
   async function register() {
     const r = await fetch(`${API}/api/teacher/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password }) });
@@ -148,6 +164,7 @@ export default function App() {
   }
 
   useEffect(() => { if (token) listExams(); }, [token]);
+  useEffect(() => { loadSubmissions(); }, [token, selectedExam]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -160,8 +177,13 @@ export default function App() {
           <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
           <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
           <button onClick={register}>Register</button>
-          <button onClick={login}>Login</button>
-          {token && <span>Logged in</span>}
+          <button onClick={login} disabled={!email || !password}>Login</button>
+          {token ? (
+            <>
+              <span>Logged in</span>
+              <button onClick={logout}>Logout</button>
+            </>
+          ) : null}
         </div>
       </section>
 
@@ -190,6 +212,35 @@ export default function App() {
             ))}
           </ul>
         </div>
+      </section>
+
+      <section className="mt-4">
+        <h2 className="font-bold">Teacher: Submissions</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <button onClick={loadSubmissions} disabled={!selectedExam || !token}>Refresh Submissions</button>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left' }}>ID</th>
+              <th>Status</th>
+              <th>Answers</th>
+              <th>Total Score</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {submissionsList.map(s => (
+              <tr key={s.id}>
+                <td style={{ fontFamily: 'monospace' }}>{s.id}</td>
+                <td>{s.status}</td>
+                <td>{s.answersCount}</td>
+                <td>{s.totalScore ?? '-'}</td>
+                <td>{new Date(s.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="mt-4">
