@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: evalio-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false
+      - key: OPENAI_KEY
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false
+      - key: JWT_SECRET
+        sync: false

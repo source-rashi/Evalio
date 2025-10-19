@@ -6,6 +6,7 @@ Backend (Render/Railway)
 2. Build command: `npm install`
 3. Start command: `npm start`
 4. Add environment variables from `.env.example`.
+5. Optional: Use `render.yaml` to define the service as code.
 
 Frontend (Vercel)
 -----------------
@@ -34,3 +35,10 @@ OpenAI / Gemini NLP
 -------------------
 1. Add `OPENAI_KEY` or Gemini API key.
 2. Implement in `src/routes/evaluate.js` by calling the model and returning JSON { score, feedback } per answer.
+
+Continuous Integration (GitHub Actions)
+---------------------------------------
+This repo includes `.github/workflows/ci.yml` which:
+- Installs backend deps and runs a placeholder lint step.
+- Installs and builds the frontend.
+You can extend it to run lint/tests when added.
