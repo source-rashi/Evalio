@@ -64,6 +64,12 @@ router.post('/:submissionId', evalLimiter, param('submissionId').isMongoId(), as
     const totalScore = results.reduce((sum, r) => sum + (r.score || 0), 0);
     const evalDoc = new Evaluation({ submission_id: submission._id, results, totalScore });
     await evalDoc.save();
+    
+    // Update submission status to 'evaluated'
+    submission.status = 'evaluated';
+    await submission.save();
+    console.log(`✓ Submission ${submission._id} evaluated. Total score: ${totalScore}`);
+    
     res.json({ ok: true, evaluation: evalDoc });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });

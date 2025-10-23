@@ -22,6 +22,9 @@ router.get('/submissions', auth, async (req, res) => {
     })
       .populate('student_id', 'name email')
       .sort({ createdAt: -1 });
+    
+    console.log(`Found ${subs.length} submissions for exam ${examId} with status finalized/evaluated`);
+    
     const evals = await Evaluation.find({ submission_id: { $in: subs.map(s => s._id) } });
     const evalMap = new Map(evals.map(e => [String(e.submission_id), e]));
     const data = subs.map(s => ({

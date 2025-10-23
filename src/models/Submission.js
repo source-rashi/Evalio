@@ -9,7 +9,7 @@ const AnswerSchema = new mongoose.Schema({
 const SubmissionSchema = new mongoose.Schema({
   student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
   exam_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam' },
-  status: { type: String, enum: ['draft', 'finalized'], default: 'draft' },
+  status: { type: String, enum: ['draft', 'finalized', 'evaluated'], default: 'draft' },
   answers: [AnswerSchema]
 }, { timestamps: true });
 

@@ -61,6 +61,7 @@ router.post('/:id/finalize', async (req, res) => {
     }
     s.status = 'finalized';
     await s.save();
+    console.log(`✓ Submission ${s._id} finalized for exam ${s.exam_id}, student: ${s.student_id || 'anonymous'}`);
     res.json({ ok: true, submission: s });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
