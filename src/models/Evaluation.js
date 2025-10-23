@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const ResultSchema = new mongoose.Schema({
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
   score: Number,
+  maxScore: Number, // Store the max score for this question
   feedback: String
 });
 

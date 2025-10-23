@@ -109,17 +109,22 @@ async function gradeAnswer({ modelAnswer, studentAnswer, maxScore = 5, keypoints
   const openaiKey = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
 
+  console.log(`🤖 Grading with provider: ${provider}, maxScore: ${maxScore}, keypoints: ${keypoints?.length || 0}`);
+
   // Short-circuit on empty answer
   if (!studentAnswer || !studentAnswer.trim()) {
+    console.log('⚠️  Empty student answer, returning 0');
     return { score: 0, feedback: 'No answer provided', provider: 'none' };
   }
 
   try {
     let raw = null;
     if (provider === 'openai' && openaiKey) {
+      console.log('🔵 Using OpenAI for grading...');
       raw = await callOpenAI({ apiKey: openaiKey, model: process.env.OPENAI_MODEL, modelAnswer, studentAnswer, maxScore, keypoints });
       const parsed = parseJsonSafe(raw);
       if (parsed) {
+        console.log(`✓ OpenAI scored: ${parsed.score}/${maxScore}`);
         return {
           score: coerceScore(parsed.score, maxScore),
           feedback: String(parsed.feedback || '').slice(0, 500),
@@ -127,9 +132,11 @@ async function gradeAnswer({ modelAnswer, studentAnswer, maxScore = 5, keypoints
         };
       }
     } else if (provider === 'gemini' && geminiKey) {
+      console.log('🟢 Using Gemini for grading...');
       raw = await callGemini({ apiKey: geminiKey, model: process.env.GEMINI_MODEL, modelAnswer, studentAnswer, maxScore, keypoints });
       const parsed = parseJsonSafe(raw);
       if (parsed) {
+        console.log(`✓ Gemini scored: ${parsed.score}/${maxScore}`);
         return {
           score: coerceScore(parsed.score, maxScore),
           feedback: String(parsed.feedback || '').slice(0, 500),
@@ -137,13 +144,15 @@ async function gradeAnswer({ modelAnswer, studentAnswer, maxScore = 5, keypoints
         };
       }
     }
-  } catch {
+  } catch (err) {
+    console.error('❌ AI grading error:', err.message);
     // Swallow and fallback
-    // console.error('AI grading error:', err.message);
   }
 
   // Fallback heuristic
+  console.log('🔶 Falling back to heuristic grading...');
   const h = weightedHeuristic(modelAnswer || '', studentAnswer || '', keypoints, maxScore);
+  console.log(`✓ Heuristic scored: ${h.score}/${maxScore}`);
   return { score: h.score, feedback: h.feedback + ' (heuristic)', provider: 'heuristic' };
 }
 

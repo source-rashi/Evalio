@@ -17,20 +17,24 @@ router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res)
       return res.json({ ok: true, evaluation: null }); // No evaluation yet
     }
     
-    // Format evaluation with question scores
+    // Calculate maxScore from results
     const questionScores = evaluation.results?.map(r => ({
       questionId: r.questionId,
       score: r.score,
-      maxScore: 5, // You might want to fetch actual max from question
+      maxScore: r.maxScore || 5, // Use stored maxScore or default to 5
       feedback: r.feedback
     })) || [];
+    
+    const maxScore = questionScores.reduce((sum, q) => sum + q.maxScore, 0);
     
     res.json({ 
       ok: true, 
       evaluation: {
+        _id: evaluation._id,
         totalScore: evaluation.totalScore,
-        maxScore: questionScores.reduce((sum, q) => sum + q.maxScore, 0),
-        questionScores
+        maxScore,
+        questionScores,
+        createdAt: evaluation.createdAt
       }
     });
   } catch (err) {
@@ -52,27 +56,67 @@ router.post('/:submissionId', evalLimiter, param('submissionId').isMongoId(), as
     const qMap = new Map(qDocs.map(q => [String(q._id), q]));
 
     const results = [];
+    let maxScore = 0;
+    
     for (const a of submission.answers) {
       const q = qMap.get(String(a.questionId?._id || a.questionId));
-      const max = Math.min(5, q?.marks ?? 5);
-      const model = q?.modelAnswer || '';
-      const keypoints = q?.keypoints || [];
+      if (!q) {
+        console.warn(`Question not found for answer: ${a.questionId}`);
+        continue;
+      }
+      
+      const questionMaxScore = q.marks || 5;
+      maxScore += questionMaxScore;
+      
+      const model = q.modelAnswer || '';
+      const keypoints = q.keypoints || [];
       const student = a.extractedText || '';
-      const r = await gradeAnswer({ modelAnswer: model, studentAnswer: student, maxScore: max, keypoints });
-      results.push({ questionId: a.questionId, score: r.score, feedback: r.feedback });
+      
+      console.log(`Grading question ${q._id}: max=${questionMaxScore}, model length=${model.length}, student length=${student.length}`);
+      
+      const r = await gradeAnswer({ 
+        modelAnswer: model, 
+        studentAnswer: student, 
+        maxScore: questionMaxScore, 
+        keypoints 
+      });
+      
+      results.push({ 
+        questionId: a.questionId, 
+        score: r.score, 
+        feedback: r.feedback,
+        maxScore: questionMaxScore
+      });
     }
+    
     const totalScore = results.reduce((sum, r) => sum + (r.score || 0), 0);
+    
+    console.log(`Evaluation complete: ${totalScore}/${maxScore} (${results.length} questions)`);
+    
     const evalDoc = new Evaluation({ submission_id: submission._id, results, totalScore });
     await evalDoc.save();
     
     // Update submission status to 'evaluated'
     submission.status = 'evaluated';
     await submission.save();
-    console.log(`✓ Submission ${submission._id} evaluated. Total score: ${totalScore}`);
     
-    res.json({ ok: true, evaluation: evalDoc });
+    console.log(`✓ Submission ${submission._id} evaluated. Total score: ${totalScore}/${maxScore}`);
+    
+    res.json({ 
+      ok: true, 
+      evaluation: {
+        _id: evalDoc._id,
+        submission_id: evalDoc.submission_id,
+        totalScore,
+        maxScore,
+        results,
+        createdAt: evalDoc.createdAt
+      }
+    });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
+    console.error('❌ Evaluation POST error:', err.message);
+    console.error('Stack:', err.stack);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

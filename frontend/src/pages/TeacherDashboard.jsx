@@ -27,6 +27,11 @@ export default function TeacherDashboard() {
   const [submissionsList, setSubmissionsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [evaluating, setEvaluating] = useState(null);
+  
+  // Detail view state
+  const [viewingSubmission, setViewingSubmission] = useState(null);
+  const [submissionDetails, setSubmissionDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -35,9 +40,9 @@ export default function TeacherDashboard() {
     if (token) listExams();
   }, [token]);
 
-  // Load submissions when exam selected
+  // Load submissions when exam selected or on initial load
   useEffect(() => {
-    if (selectedExam && token) loadSubmissions();
+    if (token) loadSubmissions();
   }, [selectedExam, token]);
 
   function handleLogout() {
@@ -178,9 +183,14 @@ export default function TeacherDashboard() {
   }
 
   async function loadSubmissions() {
-    if (!selectedExam || !token) return;
+    if (!token) return;
     try {
-      const r = await fetch(`${API}/api/teacher/submissions?examId=${selectedExam}`, {
+      // If selectedExam is empty (All Exams), fetch without examId filter
+      const url = selectedExam 
+        ? `${API}/api/teacher/submissions?examId=${selectedExam}`
+        : `${API}/api/teacher/submissions`;
+      
+      const r = await fetch(url, {
         headers: { ...authHeader },
       });
       const j = await r.json();
@@ -189,6 +199,43 @@ export default function TeacherDashboard() {
     } catch (e) {
       console.error('Error loading submissions:', e);
     }
+  }
+
+  async function viewSubmissionDetails(submissionId) {
+    setViewingSubmission(submissionId);
+    setLoadingDetails(true);
+    try {
+      // Fetch submission details
+      const subRes = await fetch(`${API}/api/submission/${submissionId}`);
+      const subData = await subRes.json();
+      
+      // Fetch evaluation if exists
+      const evalRes = await fetch(`${API}/api/evaluate/${submissionId}`);
+      const evalData = await evalRes.json();
+      
+      // Fetch exam details with questions
+      const examRes = await fetch(`${API}/api/exam/${subData.submission.exam_id}/questions`, {
+        headers: { ...authHeader }
+      });
+      const examData = await examRes.json();
+      
+      setSubmissionDetails({
+        submission: subData.submission,
+        evaluation: evalData.evaluation,
+        questions: examData.questions || []
+      });
+    } catch (e) {
+      console.error('Error loading submission details:', e);
+      alert('Failed to load submission details');
+      setViewingSubmission(null);
+    } finally {
+      setLoadingDetails(false);
+    }
+  }
+
+  function closeDetailsModal() {
+    setViewingSubmission(null);
+    setSubmissionDetails(null);
   }
 
   function selectedExamObj() {
@@ -648,8 +695,7 @@ export default function TeacherDashboard() {
                     </select>
                     <button
                       onClick={loadSubmissions}
-                      disabled={!selectedExam}
-                      className="border px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                      className="border px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       Refresh
                     </button>
@@ -663,6 +709,11 @@ export default function TeacherDashboard() {
                         <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">
                           Student
                         </th>
+                        {!selectedExam && (
+                          <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">
+                            Exam
+                          </th>
+                        )}
                         <th className="px-6 py-3 text-left text-sm font-semibold text-text-secondary">
                           Submission ID
                         </th>
@@ -686,10 +737,10 @@ export default function TeacherDashboard() {
                     <tbody>
                       {submissionsList.length === 0 ? (
                         <tr className="border-b">
-                          <td colSpan={7} className="px-6 py-8 text-center text-text-secondary text-sm">
+                          <td colSpan={!selectedExam ? 8 : 7} className="px-6 py-8 text-center text-text-secondary text-sm">
                             {selectedExam
                               ? 'No submissions yet for this exam.'
-                              : 'Select an exam to view submissions.'}
+                              : 'No submissions found across all exams.'}
                           </td>
                         </tr>
                       ) : (
@@ -703,6 +754,16 @@ export default function TeacherDashboard() {
                                 )}
                               </div>
                             </td>
+                            {!selectedExam && (
+                              <td className="px-6 py-4">
+                                <div>
+                                  <div className="font-medium text-text-primary text-sm">{s.examTitle}</div>
+                                  {s.examSubject && (
+                                    <div className="text-xs text-text-secondary">{s.examSubject}</div>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                             <td className="px-6 py-4 font-mono text-sm">{s.id?.slice(0, 8)}...</td>
                             <td className="px-6 py-4">
                               <span
@@ -728,7 +789,11 @@ export default function TeacherDashboard() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
-                                <button className="text-primary hover:underline text-sm">
+                                <button 
+                                  onClick={() => viewSubmissionDetails(s.id)}
+                                  className="text-primary hover:underline text-sm flex items-center gap-1"
+                                >
+                                  <Eye size={14} />
                                   View Details
                                 </button>
                                 {s.status === 'finalized' && (
@@ -747,6 +812,210 @@ export default function TeacherDashboard() {
                       )}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submission Details Modal */}
+          {viewingSubmission && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                {/* Modal Header */}
+                <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-primary/10 to-secondary/10">
+                  <div>
+                    <h3 className="font-heading font-semibold text-xl text-text-primary">
+                      Submission Details
+                    </h3>
+                    <p className="text-sm text-text-secondary mt-1">
+                      Complete evaluation breakdown
+                    </p>
+                  </div>
+                  <button
+                    onClick={closeDetailsModal}
+                    className="text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  {loadingDetails ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-text-secondary">Loading details...</p>
+                      </div>
+                    </div>
+                  ) : submissionDetails ? (
+                    <div className="space-y-6">
+                      {/* Summary Card */}
+                      <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-6 border">
+                        <div className="grid md:grid-cols-4 gap-4">
+                          <div>
+                            <div className="text-sm text-text-secondary mb-1">Student</div>
+                            <div className="font-semibold text-text-primary">
+                              {submissionDetails.submission.student_id?.name || 'Anonymous'}
+                            </div>
+                            <div className="text-xs text-text-secondary">
+                              {submissionDetails.submission.student_id?.email}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-text-secondary mb-1">Exam</div>
+                            <div className="font-semibold text-text-primary">
+                              {submissionDetails.submission.exam_id?.title}
+                            </div>
+                            <div className="text-xs text-text-secondary">
+                              {submissionDetails.submission.exam_id?.subject}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-text-secondary mb-1">Status</div>
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                              submissionDetails.submission.status === 'evaluated'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}>
+                              {submissionDetails.submission.status}
+                            </span>
+                          </div>
+                          {submissionDetails.evaluation && (
+                            <div>
+                              <div className="text-sm text-text-secondary mb-1">Total Score</div>
+                              <div className="text-3xl font-bold text-primary">
+                                {submissionDetails.evaluation.totalScore}/{submissionDetails.evaluation.maxScore}
+                              </div>
+                              <div className="text-xs text-text-secondary">
+                                {Math.round((submissionDetails.evaluation.totalScore / submissionDetails.evaluation.maxScore) * 100)}% Score
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Question-wise Details */}
+                      <div className="space-y-4">
+                        <h4 className="font-heading font-semibold text-lg text-text-primary">
+                          Question-wise Breakdown
+                        </h4>
+                        
+                        {submissionDetails.submission.answers.map((answer, idx) => {
+                          const question = submissionDetails.questions.find(q => String(q._id) === String(answer.questionId));
+                          const evaluation = submissionDetails.evaluation?.questionScores?.find(
+                            qs => String(qs.questionId) === String(answer.questionId)
+                          );
+
+                          return (
+                            <div key={idx} className="border rounded-lg p-5 bg-white shadow-sm">
+                              {/* Question Header */}
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="bg-primary text-white text-xs font-bold px-2 py-1 rounded">
+                                      Q{idx + 1}
+                                    </span>
+                                    <span className="text-sm font-medium text-text-primary">
+                                      {question?.text || 'Question not found'}
+                                    </span>
+                                  </div>
+                                  {question?.modelAnswer && (
+                                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded">
+                                      <div className="text-xs font-semibold text-amber-800 mb-1">Model Answer:</div>
+                                      <div className="text-sm text-amber-900">{question.modelAnswer}</div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right ml-4">
+                                  <div className="text-sm text-text-secondary">Max Marks</div>
+                                  <div className="text-2xl font-bold text-text-primary">
+                                    {question?.marks || evaluation?.maxScore || '?'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Student Answer */}
+                              <div className="mb-4">
+                                <div className="text-sm font-semibold text-text-primary mb-2">Student's Answer:</div>
+                                {answer.answerImage && (
+                                  <div className="mb-3">
+                                    <img 
+                                      src={answer.answerImage} 
+                                      alt="Answer sheet" 
+                                      className="max-w-full h-auto rounded border max-h-64 object-contain"
+                                    />
+                                  </div>
+                                )}
+                                <div className="p-3 bg-gray-50 border rounded text-sm text-text-primary whitespace-pre-wrap">
+                                  {answer.extractedText || 'No text answer provided'}
+                                </div>
+                              </div>
+
+                              {/* Evaluation Results */}
+                              {evaluation && (
+                                <div className="border-t pt-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="text-sm font-semibold text-text-primary">Evaluation:</div>
+                                    <div className="flex items-center gap-3">
+                                      <div className="text-sm text-text-secondary">Score:</div>
+                                      <div className="text-2xl font-bold text-secondary">
+                                        {evaluation.score}/{evaluation.maxScore}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {evaluation.feedback && (
+                                    <div className="p-3 bg-blue-50 border border-blue-200 rounded">
+                                      <div className="text-xs font-semibold text-blue-800 mb-1">AI Feedback:</div>
+                                      <div className="text-sm text-blue-900">{evaluation.feedback}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Submission Metadata */}
+                      <div className="border-t pt-4">
+                        <div className="text-sm text-text-secondary space-y-1">
+                          <div>Submission ID: <span className="font-mono">{submissionDetails.submission._id}</span></div>
+                          <div>Submitted: {new Date(submissionDetails.submission.createdAt).toLocaleString()}</div>
+                          {submissionDetails.evaluation && (
+                            <div>Evaluated: {new Date(submissionDetails.evaluation.createdAt).toLocaleString()}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-text-secondary">
+                      Failed to load submission details
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+                  <button
+                    onClick={closeDetailsModal}
+                    className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    Close
+                  </button>
+                  {submissionDetails?.submission.status === 'finalized' && (
+                    <button
+                      onClick={() => {
+                        closeDetailsModal();
+                        evaluateSubmission(viewingSubmission);
+                      }}
+                      className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-green-600 transition-colors"
+                    >
+                      Evaluate Now
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
