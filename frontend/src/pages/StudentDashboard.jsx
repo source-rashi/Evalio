@@ -187,25 +187,28 @@ export default function StudentDashboard() {
     }
   }
 
-  async function evaluateSubmission() {
-    if (!submissionId) return alert('Create a submission first');
+  // Fetch evaluation results when needed
+  async function fetchEvaluationResults() {
+    if (!submissionId) return;
     
     try {
-      const r = await fetch(`${API}/api/evaluate/${submissionId}`, {
-        method: 'POST',
-      });
+      const r = await fetch(`${API}/api/evaluate/${submissionId}`);
       const j = await r.json();
       
-      if (j.ok) {
+      if (j.ok && j.evaluation) {
         setEvaluation(j.evaluation);
-        alert(`Evaluation complete! Score: ${j.evaluation.totalScore}/${j.evaluation.maxScore}`);
-      } else {
-        alert(j.error);
       }
     } catch (e) {
-      alert('Error during evaluation');
+      console.error('Error fetching evaluation:', e);
     }
   }
+
+  // Load evaluation when Results tab is opened
+  useEffect(() => {
+    if (activeTab === 'results' && submissionId) {
+      fetchEvaluationResults();
+    }
+  }, [activeTab, submissionId]);
 
   const sidebarItems = [
     { id: 'home', label: 'My Exams', icon: BookOpen },
@@ -427,20 +430,29 @@ export default function StudentDashboard() {
                   {/* Action Buttons */}
                   {selectedExamObj().questions?.length > 0 && (
                     <div className="mt-6 flex gap-3 justify-end border-t pt-4">
-                      <button
-                        onClick={finalizeDraft}
-                        disabled={!submissionId || submissionStatus !== 'draft' || finalizing}
-                        className="bg-amber-400 hover:bg-amber-500 text-black px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                      >
-                        {finalizing ? 'Finalizing...' : 'Finalize Submission'}
-                      </button>
-                      <button
-                        onClick={evaluateSubmission}
-                        disabled={!submissionId || submissionStatus !== 'finalized'}
-                        className="bg-secondary hover:bg-green-600 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                      >
-                        Evaluate Now
-                      </button>
+                      {submissionStatus === 'draft' && (
+                        <button
+                          onClick={finalizeDraft}
+                          disabled={!submissionId || finalizing}
+                          className="bg-primary hover:bg-indigo-600 text-white px-6 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                          {finalizing ? 'Submitting...' : 'Submit Final Answers'}
+                        </button>
+                      )}
+                      {submissionStatus === 'finalized' && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg px-6 py-3">
+                          <p className="text-green-800 font-medium">
+                            ✓ Answers submitted! Your teacher will evaluate them soon.
+                          </p>
+                        </div>
+                      )}
+                      {submissionStatus === 'evaluated' && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-6 py-3">
+                          <p className="text-blue-800 font-medium">
+                            ✓ Evaluated! Check the Results tab to see your scores.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -487,7 +499,8 @@ export default function StudentDashboard() {
                 ) : (
                   <div className="text-center py-12 text-text-secondary">
                     <TrendingUp className="mx-auto mb-3 text-gray-300" size={48} />
-                    <p>No evaluation yet. Complete and evaluate a submission to see results here.</p>
+                    <p>No evaluation yet.</p>
+                    <p className="mt-2">Submit your answers and wait for your teacher to evaluate them.</p>
                   </div>
                 )}
               </div>

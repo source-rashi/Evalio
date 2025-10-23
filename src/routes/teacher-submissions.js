@@ -15,7 +15,11 @@ router.get('/submissions', auth, async (req, res) => {
     if (!exam || String(exam.teacher_id) !== String(req.user.id)) {
       return res.status(403).json({ ok: false, error: 'Forbidden' });
     }
-    const subs = await Submission.find({ exam_id: examId })
+    // Only show finalized or evaluated submissions (not drafts)
+    const subs = await Submission.find({ 
+      exam_id: examId,
+      status: { $in: ['finalized', 'evaluated'] }
+    })
       .populate('student_id', 'name email')
       .sort({ createdAt: -1 });
     const evals = await Evaluation.find({ submission_id: { $in: subs.map(s => s._id) } });

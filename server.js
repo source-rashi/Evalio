@@ -49,5 +49,6 @@ app.use('/api/student', require('./src/routes/student'));
 app.use('/api/ocr', require('./src/routes/ocr'));
 app.use('/api/draft', require('./src/routes/draft'));
 app.use('/api/teacher', require('./src/routes/teacher-submissions'));
+app.use('/api/migration', require('./src/routes/migration'));
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
