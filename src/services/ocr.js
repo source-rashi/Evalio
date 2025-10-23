@@ -1,28 +1,15 @@
-const vision = require('@google-cloud/vision');
+// Legacy OCR service - now redirects to Gemini OCR
+// This file is kept for backward compatibility but no longer uses Google Cloud Vision
 
-// Uses GOOGLE_APPLICATION_CREDENTIALS for auth
-const client = new vision.ImageAnnotatorClient();
+const { extractTextFromImageWithGemini } = require('./gemini-ocr');
 
-function getLanguageHints() {
-  const hints = (process.env.OCR_LANGUAGE_HINTS || '').split(',').map(s => s.trim()).filter(Boolean);
-  return hints.length ? hints : undefined;
-}
-
+/**
+ * @deprecated Use gemini-ocr.js instead
+ * This function now redirects to Gemini OCR for backward compatibility
+ */
 async function extractTextFromImage(imageUri) {
-  // imageUri can be a public URL (e.g., Cloudinary secure_url)
-  const imageContext = { languageHints: getLanguageHints() };
-  try {
-    const [result] = await client.documentTextDetection({ image: { source: { imageUri } }, imageContext });
-    const fullText = result.fullTextAnnotation?.text || '';
-    if (fullText && fullText.trim()) return fullText.trim();
-  } catch {
-    // fallback below
-  }
-  // Fallback to simple textDetection
-  const [fallback] = await client.textDetection(imageUri);
-  const detections = fallback.textAnnotations || [];
-  const fullText = detections[0]?.description || '';
-  return fullText.trim();
+  console.log('⚠️  Using legacy OCR function - redirecting to Gemini OCR');
+  return await extractTextFromImageWithGemini(imageUri);
 }
 
 module.exports = { extractTextFromImage };

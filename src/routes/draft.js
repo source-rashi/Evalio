@@ -4,10 +4,16 @@ const Submission = require('../models/Submission');
 const { extractTextFromImage } = require('../services/ocr');
 // const auth = require('../middleware/auth');
 
-// POST /api/draft/start { exam_id }
+// POST /api/draft/start { exam_id, student_id (optional) }
 router.post('/start', async (req, res) => {
   try {
-    const doc = new Submission({ exam_id: req.body.exam_id, answers: [], status: 'draft' });
+    const { exam_id, student_id } = req.body;
+    const doc = new Submission({ 
+      exam_id, 
+      student_id: student_id || null,
+      answers: [], 
+      status: 'draft' 
+    });
     await doc.save();
     res.json({ ok: true, submission: doc });
   } catch (err) {

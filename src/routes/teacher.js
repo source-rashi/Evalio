@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { authLimiter } = require('../middleware/rateLimit');
 const Teacher = require('../models/Teacher');
+const auth = require('../middleware/auth');
 
 // Register (simplified)
 router.post('/register', authLimiter,
@@ -48,3 +49,14 @@ router.post('/login', authLimiter,
 );
 
 module.exports = router;
+
+// Get current teacher profile (auth required)
+router.get('/me', auth, async (req, res) => {
+  try {
+    const t = await Teacher.findById(req.user.id).select('name email createdAt');
+    if (!t) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, teacher: { id: t._id, name: t.name, email: t.email, createdAt: t.createdAt } });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});

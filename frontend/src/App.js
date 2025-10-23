@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Header from './components/Header';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -174,166 +175,152 @@ export default function App() {
   useEffect(() => { loadSubmissions(); }, [token, selectedExam]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold">Evalio</h1>
+    <div className="min-h-screen bg-bg">
+      <Header token={token} onLogout={logout} />
+      <main className="max-w-6xl mx-auto px-4 pt-6 pb-16 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Auth */}
+        <section className="bg-white rounded-xl border p-4 shadow-sm">
+          <h2 className="font-heading font-semibold text-text-primary mb-2">Authentication</h2>
+          <div className="flex flex-wrap gap-2">
+            <input className="border rounded-lg px-3 h-10" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
+            <input className="border rounded-lg px-3 h-10" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+            <input className="border rounded-lg px-3 h-10" placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={register}>Register</button>
+            <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={login} disabled={!email || !password}>Login</button>
+            {token ? (<span className="badge">Logged in</span>) : null}
+          </div>
+        </section>
 
-      <section className="mt-4">
-        <h2 className="font-bold">Auth</h2>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
-          <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-          <input placeholder="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-          <button onClick={register}>Register</button>
-          <button onClick={login} disabled={!email || !password}>Login</button>
-          {token ? (
-            <>
-              <span>Logged in</span>
-              <button onClick={logout}>Logout</button>
-            </>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="mt-4">
-        <h2 className="font-bold">Exams</h2>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input placeholder="Exam title" value={examTitle} onChange={e => setExamTitle(e.target.value)} />
-          <button onClick={createExam} disabled={!token}>Create Exam</button>
-          <button onClick={listExams} disabled={!token}>Refresh</button>
-          <select value={selectedExam} onChange={e => setSelectedExam(e.target.value)}>
-            <option value="">Select exam</option>
-            {exams.map(e => <option key={e._id} value={e._id}>{e.title}</option>)}
-          </select>
-        </div>
-        <div className="mt-2">
-          <h3>Questions</h3>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input placeholder="Question text" value={qText} onChange={e => setQText(e.target.value)} />
-            <input placeholder="Marks" type="number" value={qMarks} onChange={e => setQMarks(e.target.value)} />
-            <input placeholder="Model answer" value={qModelAns} onChange={e => setQModelAns(e.target.value)} />
-            <div style={{ width: '100%', marginTop: 8 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Keypoints (optional)</div>
-              {qKeypoints.map((kp, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
-                  <input
-                    placeholder={`Keypoint #${idx + 1}`}
-                    value={kp.text}
-                    onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, text: e.target.value } : k))}
-                    style={{ flex: 1 }}
-                  />
-                  <input
-                    placeholder="Weight"
-                    type="number"
-                    value={kp.weight}
-                    min={0}
-                    onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, weight: e.target.value } : k))}
-                    style={{ width: 100 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setQKeypoints(prev => prev.filter((_, i) => i !== idx))}
-                    disabled={qKeypoints.length === 1}
-                  >Remove</button>
+        {/* Exams */}
+        <section className="bg-white rounded-xl border p-4 shadow-sm">
+          <h2 className="font-heading font-semibold text-text-primary mb-2">Exams</h2>
+          <div className="flex flex-wrap gap-2">
+            <input className="border rounded-lg px-3 h-10" placeholder="Exam title" value={examTitle} onChange={e => setExamTitle(e.target.value)} />
+            <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={createExam} disabled={!token}>Create Exam</button>
+            <button className="border px-3 py-2 rounded-lg" onClick={listExams} disabled={!token}>Refresh</button>
+            <select className="border rounded-lg px-3 h-10" value={selectedExam} onChange={e => setSelectedExam(e.target.value)}>
+              <option value="">Select exam</option>
+              {exams.map(e => <option key={e._id} value={e._id}>{e.title}</option>)}
+            </select>
+          </div>
+          <div className="stack">
+            <div className="label">Add question</div>
+            <div className="row">
+              <input className="input" placeholder="Question text" value={qText} onChange={e => setQText(e.target.value)} style={{ flex: 1 }} />
+              <input className="input" placeholder="Marks" type="number" value={qMarks} onChange={e => setQMarks(e.target.value)} style={{ width: 120 }} />
+              <input className="input" placeholder="Model answer" value={qModelAns} onChange={e => setQModelAns(e.target.value)} style={{ flex: 1 }} />
+            </div>
+            <div className="mt-2">
+              <div className="text-sm text-text-secondary">Keypoints (optional)</div>
+              <div className="flex flex-col gap-2">
+                {qKeypoints.map((kp, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input className="border rounded-lg px-3 h-10 flex-1" placeholder={`Keypoint #${idx + 1}`} value={kp.text} onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, text: e.target.value } : k))} />
+                    <input className="border rounded-lg px-3 h-10 w-28" placeholder="Weight" type="number" value={kp.weight} min={0} onChange={e => setQKeypoints(prev => prev.map((k, i) => i === idx ? { ...k, weight: e.target.value } : k))} />
+                    <button className="border px-3 py-2 rounded-lg" type="button" onClick={() => setQKeypoints(prev => prev.filter((_, i) => i !== idx))} disabled={qKeypoints.length === 1}>Remove</button>
+                  </div>
+                ))}
+                <button className="border px-3 py-2 rounded-lg" type="button" onClick={() => setQKeypoints(prev => [...prev, { text: '', weight: 1 }])}>+ Add keypoint</button>
+              </div>
+            </div>
+            <div className="actions">
+              <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={addQuestion} disabled={!token || !selectedExam}>Add Question</button>
+            </div>
+            <div className="stack">
+              {exams.find(x => x._id === selectedExam)?.questions?.map(q => (
+                <div key={q._id} className="border rounded-lg p-3 bg-white">
+                  <div className="font-semibold text-text-primary">{q.text} <span className="muted">(marks: {q.marks})</span></div>
+                  {Array.isArray(q.keypoints) && q.keypoints.length > 0 && (
+                    <div className="muted mt-1">
+                      Keypoints: {q.keypoints.map(kp => `${kp.text}(${kp.weight ?? 1})`).join(', ')}
+                    </div>
+                  )}
                 </div>
               ))}
-              <button type="button" onClick={() => setQKeypoints(prev => [...prev, { text: '', weight: 1 }])}>+ Add keypoint</button>
             </div>
-            <button onClick={addQuestion} disabled={!token || !selectedExam}>Add Question</button>
           </div>
-          <ul>
-            {exams.find(x => x._id === selectedExam)?.questions?.map(q => (
-              <li key={q._id}>
-                {q.text} (marks: {q.marks})
-                {Array.isArray(q.keypoints) && q.keypoints.length > 0 && (
-                  <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4 }}>
-                    Keypoints: {q.keypoints.map(kp => `${kp.text}(${kp.weight ?? 1})`).join(', ')}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+        </section>
 
-      <section className="mt-4">
-        <h2 className="font-bold">Teacher: Submissions</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-          <button onClick={loadSubmissions} disabled={!selectedExam || !token}>Refresh Submissions</button>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left' }}>ID</th>
-              <th>Status</th>
-              <th>Answers</th>
-              <th>Total Score</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {submissionsList.map(s => (
-              <tr key={s.id}>
-                <td style={{ fontFamily: 'monospace' }}>{s.id}</td>
-                <td>{s.status}</td>
-                <td>{s.answersCount}</td>
-                <td>{s.totalScore ?? '-'}</td>
-                <td>{new Date(s.createdAt).toLocaleString()}</td>
+        {/* Teacher submissions */}
+        <section className="bg-white rounded-xl border p-4 shadow-sm lg:col-span-2">
+          <h2>Teacher: Submissions</h2>
+          <div className="flex items-center gap-2 mb-2">
+            <button className="border px-3 py-2 rounded-lg" onClick={loadSubmissions} disabled={!selectedExam || !token}>Refresh Submissions</button>
+          </div>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left text-text-secondary font-semibold">ID</th>
+                <th className="text-left text-text-secondary font-semibold">Status</th>
+                <th className="text-left text-text-secondary font-semibold">Answers</th>
+                <th className="text-left text-text-secondary font-semibold">Total Score</th>
+                <th className="text-left text-text-secondary font-semibold">Created</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {submissionsList.map(s => (
+                <tr key={s.id}>
+                  <td className="font-mono">{s.id}</td>
+                  <td>{s.status}</td>
+                  <td>{s.answersCount}</td>
+                  <td>{s.totalScore ?? '-'}</td>
+                  <td>{new Date(s.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
 
-      <section className="mt-4">
-        <h2 className="font-bold">Submission & Evaluation</h2>
-        {selectedExamObj()?.questions?.length ? (
-          <div>
-            {selectedExamObj().questions.map(q => (
-              <div key={q._id} style={{ border: '1px solid #e5e7eb', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-                <div style={{ fontWeight: 600 }}>{q.text} (marks: {q.marks})</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-                  <input type="file" accept="image/*" onChange={(e) => ocrUpload(e, q._id)} />
-                  {ocrLoading && <span>OCR extracting…</span>}
+        {/* Submission & Evaluation */}
+        <section className="bg-white rounded-xl border p-4 shadow-sm lg:col-span-2">
+          <h2>Submission & Evaluation</h2>
+          {selectedExamObj()?.questions?.length ? (
+            <div className="flex flex-col gap-2">
+              {selectedExamObj().questions.map(q => (
+                <div key={q._id} className="border rounded-lg p-3 bg-white">
+                  <div className="font-semibold text-text-primary">{q.text} <span className="muted">(marks: {q.marks})</span></div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input type="file" accept="image/*" onChange={(e) => ocrUpload(e, q._id)} />
+                    {ocrLoading && <span className="status">OCR extracting…</span>}
+                  </div>
+                  <textarea
+                    className="border rounded-lg p-3 w-full min-h-[120px]"
+                    placeholder="Extracted text or type manually"
+                    rows={4}
+                    value={answersByQid[q._id]?.extractedText || ''}
+                    onChange={(e) => {
+                      setAnswersByQid(prev => ({ ...prev, [q._id]: { ...(prev[q._id] || {}), extractedText: e.target.value } }));
+                      scheduleSave(q._id);
+                    }}
+                  />
+                  {answersByQid[q._id]?.imageUrl && (
+                    <div className="muted mt-1">Image: {answersByQid[q._id].imageUrl}</div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={() => saveAnswer(q._id)} disabled={!submissionId}>Save Answer</button>
+                    <span className="status">
+                      {saveStatusByQid[q._id] === 'saving' && 'Saving…'}
+                      {saveStatusByQid[q._id] === 'saved' && 'Saved'}
+                      {saveStatusByQid[q._id] === 'error' && 'Error saving'}
+                    </span>
+                  </div>
                 </div>
-                <textarea
-                  placeholder="Extracted text or type manually"
-                  rows={3}
-                  style={{ width: '100%', marginTop: 8 }}
-                  value={answersByQid[q._id]?.extractedText || ''}
-                  onChange={(e) => {
-                    setAnswersByQid(prev => ({ ...prev, [q._id]: { ...(prev[q._id] || {}), extractedText: e.target.value } }));
-                    scheduleSave(q._id);
-                  }}
-                />
-                {answersByQid[q._id]?.imageUrl && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#4b5563' }}>Image: {answersByQid[q._id].imageUrl}</div>
-                )}
-                <div style={{ marginTop: 8 }}>
-                  <button onClick={() => saveAnswer(q._id)} disabled={!submissionId}>Save Answer</button>
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#4b5563' }}>
-                    {saveStatusByQid[q._id] === 'saving' && 'Saving…'}
-                    {saveStatusByQid[q._id] === 'saved' && 'Saved'}
-                    {saveStatusByQid[q._id] === 'error' && 'Error saving'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          ) : (
+            <div className="muted">Select an exam with questions to add answers.</div>
+          )}
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <button className="bg-primary hover:bg-indigo-600 text-white px-3 py-2 rounded-lg" onClick={startDraft} disabled={!selectedExam || submissionId}>Start Draft</button>
+            <span className="status">Submission ID: {submissionId} ({submissionStatus})</span>
+            <button className="bg-amber-400 hover:bg-amber-500 text-black px-3 py-2 rounded-lg" onClick={finalizeDraft} disabled={!submissionId || submissionStatus !== 'draft'}>Finalize</button>
+            <button className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg" onClick={evaluateSubmission} disabled={!submissionId || submissionStatus !== 'finalized'}>Evaluate</button>
           </div>
-        ) : (
-          <div style={{ color: '#6b7280' }}>Select an exam with questions to add answers.</div>
-        )}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button onClick={startDraft} disabled={!selectedExam || submissionId}>Start Draft</button>
-          <span>Submission ID: {submissionId} ({submissionStatus})</span>
-          <button onClick={finalizeDraft} disabled={!submissionId || submissionStatus !== 'draft'}>Finalize</button>
-          <button onClick={evaluateSubmission} disabled={!submissionId || submissionStatus !== 'finalized'}>Evaluate</button>
-        </div>
-        {evaluation && (
-          <pre style={{ background: '#f3f4f6', padding: 12, borderRadius: 8, marginTop: 8 }}>
-            {JSON.stringify(evaluation, null, 2)}
-          </pre>
-        )}
-      </section>
+          {evaluation && (<pre className="code mt-2">{JSON.stringify(evaluation, null, 2)}</pre>)}
+        </section>
+      </main>
     </div>
   );
 }

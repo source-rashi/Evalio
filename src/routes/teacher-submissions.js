@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const Exam = require('../models/Exam');
 const Submission = require('../models/Submission');
 const Evaluation = require('../models/Evaluation');
+const Student = require('../models/Student');
 
 // GET /api/teacher/submissions?examId=...
 router.get('/submissions', auth, async (req, res) => {
@@ -14,7 +15,9 @@ router.get('/submissions', auth, async (req, res) => {
     if (!exam || String(exam.teacher_id) !== String(req.user.id)) {
       return res.status(403).json({ ok: false, error: 'Forbidden' });
     }
-    const subs = await Submission.find({ exam_id: examId }).sort({ createdAt: -1 });
+    const subs = await Submission.find({ exam_id: examId })
+      .populate('student_id', 'name email')
+      .sort({ createdAt: -1 });
     const evals = await Evaluation.find({ submission_id: { $in: subs.map(s => s._id) } });
     const evalMap = new Map(evals.map(e => [String(e.submission_id), e]));
     const data = subs.map(s => ({
@@ -22,9 +25,22 @@ router.get('/submissions', auth, async (req, res) => {
       status: s.status,
       answersCount: s.answers.length,
       createdAt: s.createdAt,
+      studentName: s.student_id?.name || 'Anonymous',
+      studentEmail: s.student_id?.email || '',
       totalScore: evalMap.get(String(s._id))?.totalScore ?? null,
+      maxScore: evalMap.get(String(s._id))?.maxScore ?? null,
     }));
     res.json({ ok: true, submissions: data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// GET /api/teacher/students - Get all students for assignment
+router.get('/students', auth, async (req, res) => {
+  try {
+    const students = await Student.find({}).select('_id name email').sort({ name: 1 });
+    res.json({ ok: true, students });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

@@ -10,11 +10,17 @@ const app = express();
 // Security headers
 app.use(helmet());
 // CORS
-const allowedOrigins = (process.env.CORS_ORIGIN || '*')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : '*'}));
+function buildCorsOrigin() {
+  const raw = process.env.CORS_ORIGIN;
+  if (!raw || raw.trim() === '' || raw.trim() === '*') {
+    // true allows any origin (no credentials)
+    return true;
+  }
+  const list = raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (list.length === 1 && list[0] === '*') return true;
+  return list;
+}
+app.use(cors({ origin: buildCorsOrigin() }));
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
@@ -29,7 +35,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, status: 'healthy' });
+  const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
+  const state = mongoose.connection.readyState;
+  res.json({ ok: true, status: 'healthy', db: dbStates[state] || state });
 });
 
 // Route placeholders
