@@ -7,6 +7,7 @@ const requireRole = require('../middleware/requireRole');
 const { body, param, validationResult } = require('express-validator');
 const ROLES = require('../constants/roles');
 const { getPaginationParams, buildPaginationResponse } = require('../utils/pagination');
+const cache = require('../utils/cache');
 
 router.post('/create', auth, requireRole(ROLES.TEACHER),
   body('title').isLength({ min: 2 }).withMessage('Title required'),
@@ -122,6 +123,9 @@ router.put('/:examId/toggle-public', auth, requireRole(ROLES.TEACHER), param('ex
     exam.isPublic = !exam.isPublic;
     await exam.save();
     
+    // Invalidate cache for this exam
+    await cache.invalidate.exam(examId);
+    
     res.json({ ok: true, exam });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
@@ -141,6 +145,10 @@ router.post('/question/add', auth, requireRole(ROLES.TEACHER),
   const q = new Question({ text: req.body.text, marks: req.body.marks, modelAnswer: req.body.modelAnswer, keypoints: req.body.keypoints || [], exam_id: req.body.exam_id });
       await q.save();
       await Exam.findByIdAndUpdate(req.body.exam_id, { $push: { questions: q._id } });
+      
+      // Invalidate cache for this exam's questions
+      await cache.invalidate.examQuestions(req.body.exam_id);
+      
       res.json({ ok: true, question: q });
     } catch (err) {
       res.status(400).json({ ok: false, error: err.message });
@@ -148,14 +156,30 @@ router.post('/question/add', auth, requireRole(ROLES.TEACHER),
   }
 );
 
-// Get questions for an exam
+// Get questions for an exam (with caching)
 router.get('/:examId/questions', auth, param('examId').isMongoId(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid examId' });
+  
   try {
-    const exam = await Exam.findById(req.params.examId).populate('questions');
-    if (!exam) return res.status(404).json({ ok: false, error: 'Exam not found' });
-    res.json({ ok: true, questions: exam.questions });
+    const { examId } = req.params;
+    
+    // Read-through cache: try cache first, then fetch from DB
+    const questions = await cache.readThrough(
+      cache.CacheKeys.examQuestions(examId),
+      async () => {
+        const exam = await Exam.findById(examId).populate('questions');
+        if (!exam) return null;
+        return exam.questions;
+      },
+      cache.CACHE_CONFIG.QUESTIONS_TTL
+    );
+    
+    if (!questions) {
+      return res.status(404).json({ ok: false, error: 'Exam not found' });
+    }
+    
+    res.json({ ok: true, questions });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
