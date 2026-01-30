@@ -31,7 +31,11 @@ router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
     const query = { teacher_id: req.user.id };
     
     const [exams, total] = await Promise.all([
-      Exam.find(query).populate('questions').skip(skip).limit(limit).sort({ createdAt: -1 }),
+      Exam.find(query)
+        .populate('questions', 'text marks')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
       Exam.countDocuments(query)
     ]);
     
@@ -61,7 +65,11 @@ router.get('/student/list', async (req, res) => {
     }
     
     const [exams, total] = await Promise.all([
-      Exam.find(query).populate('questions').skip(skip).limit(limit).sort({ createdAt: -1 }),
+      Exam.find(query)
+        .populate('questions', 'text marks')
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }),
       Exam.countDocuments(query)
     ]);
     

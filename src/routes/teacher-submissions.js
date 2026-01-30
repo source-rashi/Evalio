@@ -35,6 +35,7 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
     // Only show finalized or evaluated submissions (not drafts)
     const [subs, total] = await Promise.all([
       Submission.find(query)
+        .select('student_id exam_id status createdAt')
         .populate('student_id', 'name email')
         .populate('exam_id', 'title subject')
         .sort({ createdAt: -1 })
@@ -45,19 +46,20 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
     
     console.log(`Found ${subs.length} submissions ${examId ? `for exam ${examId}` : 'for all exams'} with status finalized/evaluated`);
     
-    const evals = await Evaluation.find({ submission_id: { $in: subs.map(s => s._id) } });
+    const evals = await Evaluation.find({ submission_id: { $in: subs.map(s => s._id) } })
+      .select('submission_id totalScore aiTotalScore status');
     const evalMap = new Map(evals.map(e => [String(e.submission_id), e]));
     const data = subs.map(s => ({
       id: s._id,
       status: s.status,
-      answersCount: s.answers.length,
       createdAt: s.createdAt,
       studentName: s.student_id?.name || 'Anonymous',
       studentEmail: s.student_id?.email || '',
       examTitle: s.exam_id?.title || 'Unknown Exam',
       examSubject: s.exam_id?.subject || '',
       totalScore: evalMap.get(String(s._id))?.totalScore ?? null,
-      maxScore: evalMap.get(String(s._id))?.maxScore ?? null,
+      aiTotalScore: evalMap.get(String(s._id))?.aiTotalScore ?? null,
+      evaluationStatus: evalMap.get(String(s._id))?.status ?? null,
     }));
     
     const response = buildPaginationResponse(data, total, page, limit);
