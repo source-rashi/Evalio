@@ -5,13 +5,14 @@ const Exam = require('../models/Exam');
 const Submission = require('../models/Submission');
 const Evaluation = require('../models/Evaluation');
 const Student = require('../models/Student');
+const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
 
 // GET /api/teacher/submissions?examId=...
 router.get('/submissions', auth, async (req, res) => {
   try {
     const { examId } = req.query;
     
-    let query = { status: { $in: ['finalized', 'evaluated'] } };
+    let query = { status: { $in: [SUBMISSION_STATUS.FINALIZED, SUBMISSION_STATUS.EVALUATED] } };
     
     if (examId) {
       // If examId provided, verify teacher owns it and filter by it

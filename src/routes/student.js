@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const Student = require('../models/Student');
 const Evaluation = require('../models/Evaluation');
 const auth = require('../middleware/auth');
+const ROLES = require('../constants/roles');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'evalio_secret_key_2025';
 
@@ -80,7 +81,7 @@ router.post('/login',
 
       // Generate JWT with role
       const token = jwt.sign(
-        { id: student._id, email: student.email, role: 'student' },
+        { id: student._id, email: student.email, role: ROLES.STUDENT },
         JWT_SECRET,
         { expiresIn: '7d' }
       );

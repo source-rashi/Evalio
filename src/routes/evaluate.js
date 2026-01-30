@@ -6,6 +6,7 @@ const Question = require('../models/Question');
 const { gradeAnswer } = require('../services/grading');
 const { evalLimiter } = require('../middleware/rateLimit');
 const { param, validationResult } = require('express-validator');
+const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
 
 // Get evaluation for a submission
 router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res) => {
@@ -49,7 +50,7 @@ router.post('/:submissionId', evalLimiter, param('submissionId').isMongoId(), as
   try {
   const submission = await Submission.findById(req.params.submissionId).populate('answers.questionId');
     if (!submission) return res.status(404).json({ ok: false, error: 'Not found' });
-  if (submission.status === 'draft') return res.status(400).json({ ok: false, error: 'Finalize submission before evaluation' });
+  if (submission.status === SUBMISSION_STATUS.DRAFT) return res.status(400).json({ ok: false, error: 'Finalize submission before evaluation' });
 
     const qIds = submission.answers.map(a => a.questionId?._id).filter(Boolean);
     const qDocs = await Question.find({ _id: { $in: qIds } });
@@ -97,7 +98,7 @@ router.post('/:submissionId', evalLimiter, param('submissionId').isMongoId(), as
     await evalDoc.save();
     
     // Update submission status to 'evaluated'
-    submission.status = 'evaluated';
+    submission.status = SUBMISSION_STATUS.EVALUATED;
     await submission.save();
     
     console.log(`✓ Submission ${submission._id} evaluated. Total score: ${totalScore}/${maxScore}`);
