@@ -87,6 +87,15 @@ async function processEvaluation(job) {
   console.log(`📝 Processing evaluation for submission: ${submissionId}`);
   console.log(`   Exam: ${examId}, Student: ${studentId}`);
   
+  // Update evaluation status to "processing"
+  await Evaluation.findOneAndUpdate(
+    { submission_id: submissionId },
+    {
+      jobStatus: 'processing',
+      processingStartedAt: new Date()
+    }
+  );
+  
   // Update job progress
   await job.updateProgress(10);
   
@@ -177,9 +186,15 @@ async function processEvaluation(job) {
   console.log(`   ✅ Evaluation saved: ${evaluation._id}`);
   await job.updateProgress(95);
   
-  // Step 5: Update submission status
+  // Step 5: Update submission status and mark job as completed
   submission.status = SUBMISSION_STATUS.EVALUATED;
   await submission.save();
+  
+  // Update evaluation job status to completed
+  await Evaluation.findByIdAndUpdate(evaluation._id, {
+    jobStatus: 'completed',
+    evaluatedAt: new Date()
+  });
   
   await job.updateProgress(100);
   
@@ -187,7 +202,8 @@ async function processEvaluation(job) {
     evaluationId: evaluation._id,
     score: totalScore,
     maxScore,
-    questionsGraded: results.length
+    questionsGraded: results.length,
+    jobStatus: 'completed'
   };
 }
 
@@ -215,6 +231,17 @@ async function startWorker() {
     } catch (error) {
       console.error(`❌ Job Failed: ${job.id}`);
       console.error(`   Error: ${error.message}`);
+      
+      // Update evaluation to mark job as failed
+      const { submissionId } = job.data;
+      await Evaluation.findOneAndUpdate(
+        { submission_id: submissionId },
+        {
+          jobStatus: 'failed',
+          jobError: error.message
+        }
+      );
+      
       throw error; // Re-throw to trigger retry
     }
   }, {

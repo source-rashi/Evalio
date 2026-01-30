@@ -116,7 +116,24 @@ const EvaluationSchema = new mongoose.Schema({
     index: true
   },
   
+  jobStatus: {
+    type: String,
+    enum: ['queued', 'processing', 'completed', 'failed'],
+    default: 'queued',
+    index: true
+  },
+  
+  jobError: {
+    type: String,
+    default: null
+  },
+  
   queuedAt: {
+    type: Date,
+    default: null
+  },
+  
+  processingStartedAt: {
     type: Date,
     default: null
   },

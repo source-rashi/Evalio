@@ -52,7 +52,14 @@ router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res)
         status: evaluation.status,
         averageConfidence: evaluation.averageConfidence,
         hasOverrides: evaluation.hasOverrides,
-        createdAt: evaluation.createdAt
+        createdAt: evaluation.createdAt,
+        // Job tracking fields
+        jobId: evaluation.jobId,
+        jobStatus: evaluation.jobStatus,
+        jobError: evaluation.jobError,
+        queuedAt: evaluation.queuedAt,
+        processingStartedAt: evaluation.processingStartedAt,
+        evaluatedAt: evaluation.evaluatedAt
       }
     });
   } catch (err) {
