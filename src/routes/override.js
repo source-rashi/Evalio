@@ -168,6 +168,99 @@ router.post(
 );
 
 /**
+ * GET /api/evaluation/:evaluationId/overrides
+ * Get all manual overrides for a specific evaluation
+ * Teacher-only endpoint for audit trail visibility
+ */
+router.get(
+  '/:evaluationId/overrides',
+  auth,
+  requireRole(ROLES.TEACHER),
+  param('evaluationId').isMongoId().withMessage('Invalid evaluation ID'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Validation failed', 
+        details: errors.array() 
+      });
+    }
+
+    const { evaluationId } = req.params;
+
+    try {
+      // 1. Verify evaluation exists
+      const evaluation = await Evaluation.findById(evaluationId);
+      if (!evaluation) {
+        return res.status(404).json({ ok: false, error: 'Evaluation not found' });
+      }
+
+      // 2. Fetch all overrides for this evaluation
+      const overrides = await ManualOverride.find({ evaluationId })
+        .populate('questionId', 'text marks type')
+        .populate('teacherId', 'name email')
+        .sort({ createdAt: -1 });
+
+      // 3. Calculate override statistics
+      const stats = {
+        totalOverrides: overrides.length,
+        questionsOverridden: new Set(overrides.map(o => o.questionId._id.toString())).size,
+        totalScoreDifference: overrides.reduce((sum, o) => sum + (o.overriddenScore - o.originalScore), 0),
+        averageScoreChange: overrides.length > 0 
+          ? overrides.reduce((sum, o) => sum + (o.overriddenScore - o.originalScore), 0) / overrides.length 
+          : 0
+      };
+
+      // 4. Format override details for response
+      const overrideDetails = overrides.map(override => ({
+        id: override._id,
+        questionId: override.questionId._id,
+        questionText: override.questionId.text?.substring(0, 100) + (override.questionId.text?.length > 100 ? '...' : ''),
+        questionType: override.questionId.type,
+        teacher: {
+          id: override.teacherId._id,
+          name: override.teacherId.name,
+          email: override.teacherId.email
+        },
+        originalScore: override.originalScore,
+        overriddenScore: override.overriddenScore,
+        maxScore: override.maxScore,
+        scoreDifference: override.overriddenScore - override.originalScore,
+        reason: override.reason,
+        originalFeedback: override.originalFeedback,
+        overriddenFeedback: override.overriddenFeedback,
+        createdAt: override.createdAt
+      }));
+
+      console.log(`📊 Override audit retrieved: Evaluation ${evaluationId}`);
+      console.log(`   Total overrides: ${stats.totalOverrides}`);
+
+      res.json({
+        ok: true,
+        evaluation: {
+          id: evaluation._id,
+          status: evaluation.status,
+          aiTotalScore: evaluation.aiTotalScore,
+          finalTotalScore: evaluation.totalScore,
+          hasOverrides: evaluation.hasOverrides
+        },
+        statistics: stats,
+        overrides: overrideDetails
+      });
+
+    } catch (err) {
+      console.error('❌ Override retrieval error:', err.message);
+      res.status(500).json({ 
+        ok: false, 
+        error: 'Failed to retrieve overrides',
+        details: err.message 
+      });
+    }
+  }
+);
+
+/**
  * POST /api/evaluation/:evaluationId/finalize
  * Finalize an evaluation and lock it from further changes
  * Teacher-only endpoint
