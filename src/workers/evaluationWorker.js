@@ -97,14 +97,35 @@ async function processEvaluation(job) {
     ? logger.createChild({ correlationId, jobId: job.id })
     : logger.createChild({ jobId: job.id });
   
-  jobLogger.info({ submissionId, examId, studentId }, 'Processing evaluation');
+  jobLogger.info({ submissionId, examId, studentId, attempt: job.attemptsMade + 1 }, 'Processing evaluation');
   
-  // Update evaluation status to "processing"
+  // IDEMPOTENCY CHECK: Verify evaluation hasn't already been completed
+  // This prevents duplicate processing on retry
+  const existingEvaluation = await Evaluation.findOne({ submission_id: submissionId });
+  
+  if (existingEvaluation && existingEvaluation.jobStatus === 'completed') {
+    jobLogger.info({ evaluationId: existingEvaluation._id }, 'Evaluation already completed - skipping (idempotent)');
+    
+    // Return existing result to prevent re-processing
+    return {
+      evaluationId: existingEvaluation._id,
+      submissionId,
+      totalScore: existingEvaluation.aiTotalScore,
+      maxScore: existingEvaluation.results?.reduce((sum, r) => sum + (r.maxScore || 5), 0) || 0,
+      questionCount: existingEvaluation.results?.length || 0,
+      averageConfidence: existingEvaluation.averageConfidence,
+      jobStatus: 'completed',
+      skipped: true // Indicate this was a no-op
+    };
+  }
+  
+  // Update evaluation status to "processing" with attempt tracking
   await Evaluation.findOneAndUpdate(
     { submission_id: submissionId },
     {
       jobStatus: 'processing',
-      processingStartedAt: new Date()
+      processingStartedAt: new Date(),
+      attemptNumber: job.attemptsMade + 1 // Track retry attempts
     }
   );
   
@@ -246,17 +267,38 @@ async function startWorker() {
     } catch (error) {
       jobLogger.logError(error, 'Job failed', { data: job.data });
       
-      // Update evaluation to mark job as failed
+      // RETRY-SAFE ERROR HANDLING
+      // Update evaluation to mark job as failed, but preserve data for retry
       const { submissionId } = job.data;
+      const attemptNumber = job.attemptsMade + 1;
+      const maxAttempts = 3;
+      const isLastAttempt = attemptNumber >= maxAttempts;
+      
       await Evaluation.findOneAndUpdate(
         { submission_id: submissionId },
         {
-          jobStatus: 'failed',
-          jobError: error.message
+          jobStatus: isLastAttempt ? 'permanently_failed' : 'failed',
+          jobError: error.message,
+          lastFailedAt: new Date(),
+          attemptNumber: attemptNumber,
+          // Only set as permanently failed if all retries exhausted
+          ...(isLastAttempt && {
+            status: EVALUATION_STATUS.FAILED
+          })
         }
       );
       
-      throw error; // Re-throw to trigger retry
+      // Log whether this will be retried
+      if (!isLastAttempt) {
+        jobLogger.warn({
+          submissionId,
+          attemptNumber,
+          maxAttempts,
+          willRetry: true
+        }, 'Job will be retried');
+      }
+      
+      throw error; // Re-throw to trigger BullMQ retry mechanism
     }
   }, {
     connection: redisConfig,
