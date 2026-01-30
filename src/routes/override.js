@@ -55,6 +55,14 @@ router.post(
         });
       }
 
+      // 2b. Check if evaluation is finalized - no overrides allowed
+      if (evaluation.status === EVALUATION_STATUS.FINALIZED) {
+        return res.status(403).json({ 
+          ok: false, 
+          error: 'Cannot override: evaluation has been finalized and locked' 
+        });
+      }
+
       // 3. Find the question result in evaluation
       const questionResult = evaluation.results.find(
         r => r.questionId.toString() === questionId
@@ -153,6 +161,92 @@ router.post(
       res.status(500).json({ 
         ok: false, 
         error: 'Failed to create manual override',
+        details: err.message 
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/evaluation/:evaluationId/finalize
+ * Finalize an evaluation and lock it from further changes
+ * Teacher-only endpoint
+ */
+router.post(
+  '/:evaluationId/finalize',
+  auth,
+  requireRole(ROLES.TEACHER),
+  param('evaluationId').isMongoId().withMessage('Invalid evaluation ID'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Validation failed', 
+        details: errors.array() 
+      });
+    }
+
+    const { evaluationId } = req.params;
+    const teacherId = req.user.id;
+
+    try {
+      // 1. Fetch evaluation
+      const evaluation = await Evaluation.findById(evaluationId);
+      if (!evaluation) {
+        return res.status(404).json({ ok: false, error: 'Evaluation not found' });
+      }
+
+      // 2. Check current status
+      if (evaluation.status === EVALUATION_STATUS.FINALIZED) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Evaluation is already finalized' 
+        });
+      }
+
+      if (evaluation.status === EVALUATION_STATUS.PENDING) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Cannot finalize: evaluation is still pending AI grading' 
+        });
+      }
+
+      // 3. Update status to FINALIZED
+      evaluation.status = EVALUATION_STATUS.FINALIZED;
+      evaluation.reviewedBy = teacherId;
+      evaluation.reviewedAt = new Date();
+
+      // 4. If evaluation has overrides, mark as manually reviewed
+      if (evaluation.hasOverrides) {
+        console.log(`📋 Evaluation ${evaluationId} finalized with manual overrides`);
+      } else {
+        console.log(`📋 Evaluation ${evaluationId} finalized without overrides`);
+      }
+
+      await evaluation.save();
+
+      console.log(`🔒 Evaluation ${evaluationId} locked by teacher ${teacherId}`);
+
+      res.json({
+        ok: true,
+        message: 'Evaluation finalized and locked successfully',
+        evaluation: {
+          id: evaluation._id,
+          status: evaluation.status,
+          aiTotalScore: evaluation.aiTotalScore,
+          finalTotalScore: evaluation.totalScore,
+          hasOverrides: evaluation.hasOverrides,
+          reviewedBy: evaluation.reviewedBy,
+          reviewedAt: evaluation.reviewedAt
+        }
+      });
+
+    } catch (err) {
+      console.error('❌ Finalization error:', err.message);
+      res.status(500).json({ 
+        ok: false, 
+        error: 'Failed to finalize evaluation',
         details: err.message 
       });
     }
