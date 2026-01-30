@@ -674,6 +674,320 @@ See [DEPLOYMENT.md](../DEPLOYMENT.md) for production deployment.
 
 ---
 
-**Document Version**: 1.0  
+## ML Integration Boundaries
+
+This section defines the **clear separation of responsibilities** between the Node.js backend and the Python ML evaluation system. Understanding these boundaries is critical for maintaining system integrity and enabling independent development.
+
+### Architectural Principle: Separation of Concerns
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         BACKEND (Node.js)                            │
+│  Responsibilities:                                                   │
+│  • API endpoints                                                     │
+│  • Authentication & authorization                                    │
+│  • Database operations                                               │
+│  • Request validation                                                │
+│  • ML result validation                                              │
+│  • Business logic orchestration                                      │
+│                                                                       │
+│  Does NOT:                                                           │
+│  • Perform ML scoring                                                │
+│  • Know ML algorithm details                                         │
+│  • Process text semantically                                         │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ Data Contract
+                                    │ (defined interface)
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         ML SYSTEM (Python)                           │
+│  Responsibilities:                                                   │
+│  • Answer evaluation                                                 │
+│  • Rubric-based scoring                                              │
+│  • Semantic similarity calculation                                   │
+│  • Feedback generation                                               │
+│  • Confidence estimation                                             │
+│                                                                       │
+│  Does NOT:                                                           │
+│  • Store data in database                                            │
+│  • Handle authentication                                             │
+│  • Serve HTTP requests directly                                      │
+│  • Know about Express routes                                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### What Backend Provides to ML
+
+The backend sends a structured evaluation request containing:
+
+```javascript
+{
+  submission: {
+    _id: ObjectId,              // Submission identifier
+    student_id: ObjectId,       // Student who submitted
+    exam_id: ObjectId,          // Exam being evaluated
+    submitted_at: Date          // When submitted
+  },
+  exam: {
+    _id: ObjectId,              // Exam identifier
+    title: String,              // Exam name
+    subject: String,            // Subject area (optional)
+    instructions: String        // Exam instructions (optional)
+  },
+  questions: [
+    {
+      _id: ObjectId,            // Question identifier
+      questionText: String,     // The question asked
+      modelAnswer: String,      // Ideal answer
+      maxScore: Number,         // Maximum possible score
+      rubric: [                 // Grading criteria
+        {
+          keypoint: String,     // Concept to look for
+          keywords: [String],   // Keywords indicating this concept
+          weight: Number        // Points for this keypoint
+        }
+      ]
+    }
+  ],
+  answers: [
+    {
+      questionId: ObjectId,     // Which question this answers
+      studentAnswer: String,    // Student's submitted answer
+      imageUrl: String          // Optional: OCR'd image reference
+    }
+  ]
+}
+```
+
+**Key Points:**
+- All data is pre-fetched from MongoDB
+- Student answers are already extracted (via OCR if needed)
+- Rubrics are pre-defined by teachers
+- ML receives **ready-to-process** data
+
+### What ML Must Return to Backend
+
+The ML system MUST return a result conforming to the **MLEvaluationResult contract** (see `src/contracts/mlEvaluationResult.js`):
+
+```javascript
+{
+  results: [                    // Per-question evaluations
+    {
+      questionId: ObjectId,     // Question being graded
+      aiScore: Number,          // Score assigned by ML (0 to maxScore)
+      maxScore: Number,         // Maximum possible score
+      confidence: Number,       // ML confidence (0.0 to 1.0)
+      aiFeedback: String,       // Feedback for student
+      matchedKeypoints: [String], // Concepts student covered
+      missingKeypoints: [String], // Concepts student missed
+      metadata: Object          // Optional: ML-specific data
+    }
+  ],
+  aiTotalScore: Number,         // Sum of all question scores
+  maxTotalScore: Number,        // Sum of all maxScores
+  averageConfidence: Number,    // Average confidence across questions
+  method: String,               // ML method used (e.g., 'hybrid_rubric_similarity')
+  evaluatedAt: Date,            // When evaluation occurred
+  systemMetadata: Object        // Optional: ML version, runtime info
+}
+```
+
+**Validation Requirements:**
+- All scores must be non-negative and ≤ maxScore
+- Confidence must be between 0.0 and 1.0
+- Total scores must equal sum of individual scores
+- No NaN or Infinity values allowed
+- All required fields must be present
+
+**Backend Validation:**
+The backend validates ALL ML output using `src/validators/mlResultValidator.js` before saving to database. Invalid results are **rejected** with clear error messages.
+
+### What Backend NEVER Does
+
+To maintain clean separation, the backend **must never**:
+
+1. **❌ Perform ML Scoring**
+   - No semantic analysis in JavaScript
+   - No keyword matching algorithms in backend
+   - No confidence calculations
+
+2. **❌ Know ML Implementation Details**
+   - Doesn't know if ML uses TF-IDF, transformers, or regex
+   - Doesn't know Python subprocess vs HTTP vs queue
+   - Only knows the input/output contract
+
+3. **❌ Modify ML Results**
+   - Backend validates but doesn't alter ML scores
+   - Teacher overrides are stored separately (ManualOverride model)
+   - Original AI scores preserved for audit trail
+
+4. **❌ Bypass Validation**
+   - All ML output goes through validation layer
+   - No "trusted" paths that skip validation
+   - Defense in depth principle
+
+### What ML System NEVER Does
+
+To maintain clean separation, the ML system **must never**:
+
+1. **❌ Access Database Directly**
+   - No MongoDB connections in Python code
+   - No ORM or database drivers
+   - Backend provides all data via input
+
+2. **❌ Perform Authentication**
+   - No JWT verification in ML code
+   - No user permission checks
+   - Backend handles all auth before calling ML
+
+3. **❌ Store State**
+   - ML is stateless - each call is independent
+   - No user sessions or cached data
+   - Backend manages all state in MongoDB
+
+4. **❌ Serve HTTP Directly to Frontend**
+   - ML is not a public API
+   - Only backend calls ML
+   - Frontend never knows ML exists
+
+### Integration Adapter Pattern
+
+The `src/services/mlAdapter.js` module provides the interface layer:
+
+```javascript
+const { evaluateAnswers } = require('../services/mlAdapter');
+
+// Backend prepares input
+const input = {
+  submission: submissionDoc,
+  exam: examDoc,
+  questions: questionDocs,
+  answers: studentAnswers
+};
+
+// Call ML (adapter handles details)
+const mlResult = await evaluateAnswers(input);
+
+// Validate output
+const validated = validateAndSanitize(mlResult, {
+  expectedQuestionCount: questionDocs.length,
+  expectedQuestionIds: questionDocs.map(q => q._id)
+});
+
+// Save to database
+await Evaluation.create({
+  submission_id: submissionDoc._id,
+  results: validated.results,
+  aiTotalScore: validated.aiTotalScore,
+  status: EVALUATION_STATUS.AI_EVALUATED
+});
+```
+
+**Benefits of This Pattern:**
+- Backend doesn't know HOW ML works (Python, R, cloud API)
+- ML can be swapped without changing backend code
+- Clear contract enables parallel development
+- Testing is easier (mock the adapter)
+
+### Communication Methods (Planned)
+
+The adapter can implement ML communication via:
+
+1. **Python Subprocess** (current plan)
+   - `child_process.spawn('python', ['ml/evaluate.py'])`
+   - Pass JSON via stdin, read JSON from stdout
+   - Synchronous evaluation
+
+2. **HTTP Service** (future option)
+   - ML runs as separate Flask/FastAPI server
+   - Backend makes HTTP POST to ML endpoint
+   - Enables independent scaling
+
+3. **Message Queue** (future option)
+   - Backend publishes to RabbitMQ/Redis
+   - ML consumes evaluation jobs
+   - Asynchronous evaluation
+
+**Current Status:** Adapter interface defined, implementation pending.
+
+### Error Handling Boundaries
+
+**Backend Handles:**
+- Network errors (if ML service unavailable)
+- Timeout errors (if ML takes too long)
+- Validation errors (if ML returns invalid data)
+- Database errors (if save fails)
+
+**ML Handles:**
+- Text processing errors
+- Model inference errors
+- Confidence calculation errors
+- Missing rubric data
+
+**Shared Responsibility:**
+- Both systems log errors independently
+- Backend logs include request ID for tracing
+- ML includes processing time in metadata
+
+### Security Boundaries
+
+**Backend Enforces:**
+- User authentication (JWT)
+- Role-based access control (teacher/student/admin)
+- Rate limiting
+- Input sanitization (prevent SQL injection, XSS)
+- ML result validation (prevent data corruption)
+
+**ML Enforces:**
+- Input validation (reject malformed requests)
+- Resource limits (prevent DOS via large inputs)
+- Safe text processing (handle Unicode, special chars)
+
+**Neither system trusts the other blindly** - both validate their inputs.
+
+### Testing Boundaries
+
+**Backend Tests:**
+- Unit tests: Business logic, validation, routes
+- Integration tests: API endpoints with mocked ML
+- E2E tests: Full flow with ML stub
+
+**ML Tests:**
+- Unit tests: Scoring algorithms, similarity functions
+- Integration tests: Full evaluation pipeline
+- Performance tests: Speed and accuracy benchmarks
+
+**Contract Tests:**
+- Verify ML output conforms to contract
+- Verify backend input conforms to ML expectations
+- Run on both sides independently
+
+### Development Workflow
+
+**Parallel Development Enabled:**
+
+```
+Backend Team                    ML Team
+     |                              |
+     |-- Define contract ---------> |
+     |                              |
+     |-- Implement adapter -------> |-- Build ML system
+     |   (throws NotImplemented)    |   (conforms to contract)
+     |                              |
+     |-- Add validation ---------> |-- Add contract tests
+     |                              |
+     |-- Mock ML for testing ----> |-- Standalone testing
+     |                              |
+     |                              |
+     |<----- Integration ---------->|
+     |   (connect adapter to ML)    |
+```
+
+Both teams can work simultaneously without blocking each other.
+
+---
+
+**Document Version**: 1.1  
 **Last Updated**: January 30, 2026  
 **Maintained By**: Architecture Team
