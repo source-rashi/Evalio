@@ -38,11 +38,8 @@ async function extractTextFromImageWithGemini(imageUrl) {
 
     const extractedText = result.response.text().trim();
     
-    console.log('✓ Gemini OCR extracted text length:', extractedText.length);
-    
     return extractedText;
   } catch (error) {
-    console.error('Gemini OCR extraction failed:', error.message);
     throw new Error(`Failed to extract text using Gemini: ${error.message}`);
   }
 }

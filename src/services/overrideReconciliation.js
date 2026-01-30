@@ -60,10 +60,6 @@ async function applyOverridesToEvaluation(evaluationId) {
   // Save evaluation
   await evaluation.save();
 
-  console.log(`✅ Reconciliation applied to evaluation ${evaluationId}`);
-  console.log(`   Overrides applied: ${overridesApplied}`);
-  console.log(`   AI Total: ${evaluation.aiTotalScore}, Final Total: ${evaluation.totalScore}`);
-
   return evaluation;
 }
 
@@ -105,9 +101,6 @@ async function reconcileQuestion(evaluationId, questionId, overriddenScore, over
   // Save evaluation
   await evaluation.save();
 
-  console.log(`✅ Question reconciled: Evaluation ${evaluationId}, Question ${questionId}`);
-  console.log(`   AI Score: ${result.aiScore} → Final Score: ${result.finalScore}`);
-
   return evaluation;
 }
 
@@ -143,9 +136,6 @@ async function removeOverride(evaluationId, questionId) {
 
   // Save evaluation
   await evaluation.save();
-
-  console.log(`✅ Override removed: Evaluation ${evaluationId}, Question ${questionId}`);
-  console.log(`   Restored to AI Score: ${result.aiScore}`);
 
   return evaluation;
 }
