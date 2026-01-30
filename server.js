@@ -44,10 +44,50 @@ app.get('/', (req, res) => {
   res.json({ ok: true, name: 'Evalio API' });
 });
 
-app.get('/api/health', (req, res) => {
-  const dbStates = ['disconnected', 'connected', 'connecting', 'disconnecting'];
-  const state = mongoose.connection.readyState;
-  res.json({ ok: true, status: 'healthy', db: dbStates[state] || state });
+// Health check endpoints (for deployment orchestration, load balancers, monitoring)
+// GET /health - Liveness probe (is the server running?)
+app.get('/health', (req, res) => {
+  // Simple liveness check - if this responds, the server is alive
+  res.status(200).json({ status: 'ok' });
+});
+
+// GET /ready - Readiness probe (is the server ready to handle traffic?)
+app.get('/ready', async (req, res) => {
+  const checks = {
+    server: 'ok',
+    database: 'unknown',
+    queue: 'unknown'
+  };
+
+  // Check MongoDB connection
+  const dbState = mongoose.connection.readyState;
+  checks.database = dbState === 1 ? 'ok' : 'unavailable';
+
+  // Check Redis/Queue connection (non-blocking check)
+  try {
+    const evaluationQueue = require('./src/queues/evaluationQueue');
+    const queueClient = evaluationQueue.client;
+    
+    if (queueClient && queueClient.status === 'ready') {
+      checks.queue = 'ok';
+    } else if (queueClient && queueClient.status === 'connecting') {
+      checks.queue = 'connecting';
+    } else {
+      checks.queue = 'unavailable';
+    }
+  } catch (error) {
+    checks.queue = 'unavailable';
+  }
+
+  // Server is ready only if database is connected
+  // Queue is optional (system can work in degraded mode without async processing)
+  const isReady = checks.database === 'ok';
+  const statusCode = isReady ? 200 : 503;
+
+  res.status(statusCode).json({
+    status: isReady ? 'ready' : 'not_ready',
+    checks
+  });
 });
 
 // Route placeholders
