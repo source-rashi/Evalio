@@ -12,6 +12,7 @@ const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const ROLES = require('../constants/roles');
 const evaluationQueue = require('../queues/evaluationQueue');
+const { applyOverridesToEvaluation } = require('../services/overrideReconciliation');
 
 // ML Integration Components (not yet used in this route)
 // const { evaluateAnswers } = require('../services/mlAdapter');
@@ -22,9 +23,15 @@ router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res)
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid submissionId' });
   try {
-    const evaluation = await Evaluation.findOne({ submission_id: req.params.submissionId });
+    let evaluation = await Evaluation.findOne({ submission_id: req.params.submissionId });
     if (!evaluation) {
       return res.json({ ok: true, evaluation: null }); // No evaluation yet
+    }
+    
+    // Apply any manual overrides to reconcile final scores
+    // This ensures finalScore always reflects the latest overrides
+    if (evaluation.status !== EVALUATION_STATUS.PENDING) {
+      evaluation = await applyOverridesToEvaluation(evaluation._id);
     }
     
     // Calculate maxScore from results

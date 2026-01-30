@@ -8,6 +8,7 @@ const requireRole = require('../middleware/requireRole');
 const ROLES = require('../constants/roles');
 const { body, param, validationResult } = require('express-validator');
 const { EVALUATION_STATUS } = require('../constants/evaluationStatus');
+const { reconcileQuestion } = require('../services/overrideReconciliation');
 
 /**
  * POST /api/evaluation/:evaluationId/override
@@ -77,8 +78,8 @@ router.post(
 
       // 5. Check if override already exists
       const existingOverride = await ManualOverride.findOne({
-        evaluation_id: evaluationId,
-        question_id: questionId
+        evaluationId: evaluationId,
+        questionId: questionId
       });
 
       if (existingOverride) {
@@ -86,21 +87,21 @@ router.post(
           ok: false,
           error: 'Override already exists for this question',
           existingOverride: {
-            overriddenScore: existingOverride.overridden_score,
+            overriddenScore: existingOverride.overriddenScore,
             reason: existingOverride.reason,
-            createdAt: existingOverride.created_at
+            createdAt: existingOverride.createdAt
           }
         });
       }
 
       // 6. Create manual override document
       const manualOverride = new ManualOverride({
-        evaluation_id: evaluationId,
-        question_id: questionId,
-        teacher_id: teacherId,
-        ai_score: questionResult.aiScore || questionResult.score || 0,
-        overridden_score: parseFloat(overriddenScore),
-        max_score: maxScore,
+        evaluationId: evaluationId,
+        questionId: questionId,
+        teacherId: teacherId,
+        originalScore: questionResult.aiScore || questionResult.score || 0,
+        overriddenScore: parseFloat(overriddenScore),
+        maxScore: maxScore,
         reason: reason.trim()
       });
 
@@ -108,21 +109,34 @@ router.post(
 
       console.log(`✏️ Manual override created: Evaluation ${evaluationId}, Question ${questionId}`);
       console.log(`   Teacher: ${teacherId}`);
-      console.log(`   AI Score: ${manualOverride.ai_score} → Override: ${manualOverride.overridden_score}`);
+      console.log(`   AI Score: ${manualOverride.originalScore} → Override: ${manualOverride.overriddenScore}`);
+
+      // 7. Apply reconciliation: update Evaluation.finalScore
+      const updatedEvaluation = await reconcileQuestion(
+        evaluationId,
+        questionId,
+        parseFloat(overriddenScore),
+        null // No custom feedback yet
+      );
 
       res.status(201).json({
         ok: true,
         message: 'Manual override created successfully',
         override: {
           id: manualOverride._id,
-          evaluationId: manualOverride.evaluation_id,
-          questionId: manualOverride.question_id,
-          teacherId: manualOverride.teacher_id,
-          aiScore: manualOverride.ai_score,
-          overriddenScore: manualOverride.overridden_score,
-          maxScore: manualOverride.max_score,
+          evaluationId: manualOverride.evaluationId,
+          questionId: manualOverride.questionId,
+          teacherId: manualOverride.teacherId,
+          originalScore: manualOverride.originalScore,
+          overriddenScore: manualOverride.overriddenScore,
+          maxScore: manualOverride.maxScore,
           reason: manualOverride.reason,
-          createdAt: manualOverride.created_at
+          createdAt: manualOverride.createdAt
+        },
+        evaluation: {
+          aiTotalScore: updatedEvaluation.aiTotalScore,
+          finalTotalScore: updatedEvaluation.totalScore,
+          hasOverrides: updatedEvaluation.hasOverrides
         }
       });
 
