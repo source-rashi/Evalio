@@ -7,6 +7,9 @@ const { gradeAnswer } = require('../services/grading');
 const { evalLimiter } = require('../middleware/rateLimit');
 const { param, validationResult } = require('express-validator');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
+const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
+const ROLES = require('../constants/roles');
 
 // Get evaluation for a submission
 router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res) => {
@@ -44,7 +47,7 @@ router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res)
 });
 
 // Evaluate a submission by id (placeholder - integrate AI here)
-router.post('/:submissionId', evalLimiter, param('submissionId').isMongoId(), async (req, res) => {
+router.post('/:submissionId', auth, requireRole(ROLES.TEACHER), evalLimiter, param('submissionId').isMongoId(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid submissionId' });
   try {

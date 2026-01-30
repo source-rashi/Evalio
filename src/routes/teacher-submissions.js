@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const Exam = require('../models/Exam');
 const Submission = require('../models/Submission');
 const Evaluation = require('../models/Evaluation');
 const Student = require('../models/Student');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
+const ROLES = require('../constants/roles');
 
 // GET /api/teacher/submissions?examId=...
-router.get('/submissions', auth, async (req, res) => {
+router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
     const { examId } = req.query;
     
@@ -57,7 +59,7 @@ router.get('/submissions', auth, async (req, res) => {
 });
 
 // GET /api/teacher/students - Get all students for assignment
-router.get('/students', auth, async (req, res) => {
+router.get('/students', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
     const students = await Student.find({}).select('_id name email').sort({ name: 1 });
     res.json({ ok: true, students });

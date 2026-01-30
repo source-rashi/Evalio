@@ -3,10 +3,12 @@ const router = express.Router();
 const Submission = require('../models/Submission');
 const { extractTextFromImageWithGemini } = require('../services/gemini-ocr');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
-// const auth = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
+const ROLES = require('../constants/roles');
 
 // POST /api/draft/start { exam_id, student_id (optional) }
-router.post('/start', async (req, res) => {
+router.post('/start', auth, requireRole(ROLES.STUDENT), async (req, res) => {
   try {
     const { exam_id, student_id } = req.body;
     const doc = new Submission({ 
@@ -23,7 +25,7 @@ router.post('/start', async (req, res) => {
 });
 
 // PUT /api/draft/:id/answer { questionId, extractedText, answerImage }
-router.put('/:id/answer', async (req, res) => {
+router.put('/:id/answer', auth, requireRole(ROLES.STUDENT), async (req, res) => {
   try {
     const { questionId, extractedText, answerImage } = req.body;
     const s = await Submission.findById(req.params.id);
@@ -44,7 +46,7 @@ router.put('/:id/answer', async (req, res) => {
 });
 
 // POST /api/draft/:id/finalize
-router.post('/:id/finalize', async (req, res) => {
+router.post('/:id/finalize', auth, requireRole(ROLES.STUDENT), async (req, res) => {
   try {
     const s = await Submission.findById(req.params.id);
     if (!s) return res.status(404).json({ ok: false, error: 'Draft not found' });

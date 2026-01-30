@@ -3,9 +3,11 @@ const router = express.Router();
 const Exam = require('../models/Exam');
 const Question = require('../models/Question');
 const auth = require('../middleware/auth');
+const requireRole = require('../middleware/requireRole');
 const { body, param, validationResult } = require('express-validator');
+const ROLES = require('../constants/roles');
 
-router.post('/create', auth,
+router.post('/create', auth, requireRole(ROLES.TEACHER),
   body('title').isLength({ min: 2 }).withMessage('Title required'),
   async (req, res) => {
     const errors = validationResult(req);
@@ -22,7 +24,7 @@ router.post('/create', auth,
 );
 
 // List exams for current teacher
-router.get('/list', auth, async (req, res) => {
+router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
     const exams = await Exam.find({ teacher_id: req.user.id }).populate('questions');
     res.json({ ok: true, exams });
@@ -55,7 +57,7 @@ router.get('/student/list', async (req, res) => {
 });
 
 // Assign exam to students
-router.post('/:examId/assign', auth,
+router.post('/:examId/assign', auth, requireRole(ROLES.TEACHER),
   param('examId').isMongoId(),
   body('studentIds').isArray().withMessage('studentIds must be an array'),
   async (req, res) => {
@@ -82,7 +84,7 @@ router.post('/:examId/assign', auth,
 );
 
 // Toggle exam public/private
-router.put('/:examId/toggle-public', auth, param('examId').isMongoId(), async (req, res) => {
+router.put('/:examId/toggle-public', auth, requireRole(ROLES.TEACHER), param('examId').isMongoId(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid examId' });
   
@@ -102,7 +104,7 @@ router.put('/:examId/toggle-public', auth, param('examId').isMongoId(), async (r
   }
 });
 
-router.post('/question/add', auth,
+router.post('/question/add', auth, requireRole(ROLES.TEACHER),
   body('text').isLength({ min: 2 }).withMessage('Question text required'),
   body('marks').isInt({ min: 1 }).withMessage('Marks must be a positive integer'),
   body('modelAnswer').isLength({ min: 1 }).withMessage('Model answer required'),
