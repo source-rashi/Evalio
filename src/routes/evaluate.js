@@ -11,6 +11,7 @@ const { EVALUATION_STATUS } = require('../constants/evaluationStatus');
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const ROLES = require('../constants/roles');
+const evaluationQueue = require('../queues/evaluationQueue');
 
 // ML Integration Components (not yet used in this route)
 // const { evaluateAnswers } = require('../services/mlAdapter');
@@ -59,137 +60,79 @@ router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res)
   }
 });
 
-// Evaluate a submission by id (placeholder - integrate AI here)
+// Evaluate a submission by id - ASYNC with background job queue
 router.post('/:submissionId', auth, requireRole(ROLES.TEACHER), evalLimiter, param('submissionId').isMongoId(), async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid submissionId' });
+  
   try {
-  const submission = await Submission.findById(req.params.submissionId).populate('answers.questionId');
-    if (!submission) return res.status(404).json({ ok: false, error: 'Not found' });
-  if (submission.status === SUBMISSION_STATUS.DRAFT) return res.status(400).json({ ok: false, error: 'Finalize submission before evaluation' });
-
-    const qIds = submission.answers.map(a => a.questionId?._id).filter(Boolean);
-    const qDocs = await Question.find({ _id: { $in: qIds } });
-    const qMap = new Map(qDocs.map(q => [String(q._id), q]));
-
-    const results = [];
-    let maxScore = 0;
-    
-    for (const a of submission.answers) {
-      const q = qMap.get(String(a.questionId?._id || a.questionId));
-      if (!q) {
-        console.warn(`Question not found for answer: ${a.questionId}`);
-        continue;
-      }
-      
-      const questionMaxScore = q.marks || 5;
-      maxScore += questionMaxScore;
-      
-      const model = q.modelAnswer || '';
-      const keypoints = q.keypoints || [];
-      const student = a.extractedText || '';
-      
-      console.log(`Grading question ${q._id}: max=${questionMaxScore}, model length=${model.length}, student length=${student.length}`);
-      
-      const r = await gradeAnswer({ 
-        modelAnswer: model, 
-        studentAnswer: student, 
-        maxScore: questionMaxScore, 
-        keypoints 
-      });
-      
-      // Map to new schema: aiScore and finalScore
-      results.push({ 
-        questionId: a.questionId,
-        aiScore: r.score || 0,
-        finalScore: r.score || 0,  // Initially same as AI score
-        maxScore: questionMaxScore,
-        aiFeedback: r.feedback || '',
-        feedback: r.feedback || '',
-        confidence: r.confidence || 0.5,  // Default confidence
-        isOverridden: false
-      });
+    const submission = await Submission.findById(req.params.submissionId);
+    if (!submission) return res.status(404).json({ ok: false, error: 'Submission not found' });
+    if (submission.status === SUBMISSION_STATUS.DRAFT) {
+      return res.status(400).json({ ok: false, error: 'Finalize submission before evaluation' });
     }
-    
-    const aiTotalScore = results.reduce((sum, r) => sum + (r.aiScore || 0), 0);
-    const totalScore = results.reduce((sum, r) => sum + (r.finalScore || 0), 0);
-    
-    console.log(`Evaluation complete: ${totalScore}/${maxScore} (${results.length} questions)`);
-    
-    // TODO: Future ML Integration Point
-    // When ML system is ready, replace gradeAnswer() loop above with:
-    //
-    // const mlInput = {
-    //   submission: submission,
-    //   exam: examDoc,
-    //   questions: qDocs,
-    //   answers: submission.answers
-    // };
-    //
-    // try {
-    //   // Call ML adapter
-    //   const mlResult = await evaluateAnswers(mlInput);
-    //   
-    //   // CRITICAL: Validate ML output before using it
-    //   const validatedResult = validateAndSanitize(mlResult, {
-    //     expectedQuestionCount: qDocs.length,
-    //     expectedQuestionIds: qDocs.map(q => q._id)
-    //   });
-    //   
-    //   // Use validated ML results
-    //   results = validatedResult.results;
-    //   aiTotalScore = validatedResult.aiTotalScore;
-    //   totalScore = validatedResult.aiTotalScore;
-    //   averageConfidence = validatedResult.averageConfidence;
-    // } catch (error) {
-    //   if (error instanceof MLResultValidationError) {
-    //     console.error('ML validation failed:', error.validationErrors);
-    //     return res.status(422).json({
-    //       ok: false,
-    //       error: 'ML evaluation produced invalid results',
-    //       validationErrors: error.validationErrors
-    //     });
-    //   }
-    //   throw error; // Re-throw unexpected errors
-    // }
-    
-    // Create evaluation with new schema
-    // Status: PENDING → AI_EVALUATED (first lifecycle transition)
-    const evalDoc = new Evaluation({ 
-      submission_id: submission._id, 
-      results,
-      aiTotalScore,
-      totalScore,
-      status: EVALUATION_STATUS.AI_EVALUATED,  // Lifecycle: AI has completed scoring
-      averageConfidence: results.length > 0 
-        ? results.reduce((sum, r) => sum + (r.confidence || 0), 0) / results.length 
-        : 0
-    });
-    
-    // Calculate totals using model method
-    evalDoc.calculateTotals();
-    await evalDoc.save();
-    
-    // Update submission status to 'evaluated'
-    submission.status = SUBMISSION_STATUS.EVALUATED;
-    await submission.save();
-    
-    console.log(`✓ Submission ${submission._id} evaluated. Total score: ${totalScore}/${maxScore}`);
-    
-    res.json({ 
-      ok: true, 
-      evaluation: {
-        _id: evalDoc._id,
-        submission_id: evalDoc.submission_id,
-        totalScore: evalDoc.totalScore,
-        aiTotalScore: evalDoc.aiTotalScore,
-        maxScore,
-        status: evalDoc.status,
-        averageConfidence: evalDoc.averageConfidence,
-        results: evalDoc.results,
-        createdAt: evalDoc.createdAt
+
+    // Check if already being evaluated or completed
+    const existingEvaluation = await Evaluation.findOne({ submission_id: req.params.submissionId });
+    if (existingEvaluation) {
+      if (existingEvaluation.status === EVALUATION_STATUS.AI_EVALUATED || 
+          existingEvaluation.status === EVALUATION_STATUS.MANUALLY_REVIEWED ||
+          existingEvaluation.status === EVALUATION_STATUS.FINALIZED) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Evaluation already completed',
+          evaluationId: existingEvaluation._id,
+          status: existingEvaluation.status
+        });
       }
+      
+      if (existingEvaluation.jobId && existingEvaluation.status === EVALUATION_STATUS.PENDING) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Evaluation already in progress',
+          evaluationId: existingEvaluation._id,
+          jobId: existingEvaluation.jobId,
+          status: existingEvaluation.status
+        });
+      }
+    }
+
+    // Enqueue evaluation job
+    const job = await evaluationQueue.add('evaluate-submission', {
+      submissionId: req.params.submissionId,
+      examId: submission.exam_id,
+      studentId: submission.student_id,
+      triggeredBy: req.user.userId // Teacher who triggered evaluation
+    }, {
+      priority: req.body.priority || 5, // Default priority
+      jobId: `eval-${req.params.submissionId}-${Date.now()}` // Unique job ID
     });
+
+    console.log(`📤 Evaluation job enqueued: ${job.id} for submission ${req.params.submissionId}`);
+
+    // Create or update Evaluation document with PENDING status
+    const evaluation = await Evaluation.findOneAndUpdate(
+      { submission_id: req.params.submissionId },
+      {
+        submission_id: req.params.submissionId,
+        status: EVALUATION_STATUS.PENDING,
+        jobId: job.id,
+        queuedAt: new Date(),
+        results: [] // Will be populated by worker
+      },
+      { upsert: true, new: true }
+    );
+
+    // Return immediately - don't wait for processing
+    return res.json({
+      ok: true,
+      message: 'Evaluation job enqueued successfully',
+      evaluationId: evaluation._id,
+      jobId: job.id,
+      status: EVALUATION_STATUS.PENDING,
+      note: 'Poll the evaluation endpoint to check progress'
+    });
+
   } catch (err) {
     console.error('❌ Evaluation POST error:', err.message);
     console.error('Stack:', err.stack);

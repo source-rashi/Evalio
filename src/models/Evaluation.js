@@ -109,6 +109,23 @@ const EvaluationSchema = new mongoose.Schema({
     index: true
   },
   
+  // Background job tracking
+  jobId: {
+    type: String,
+    default: null,
+    index: true
+  },
+  
+  queuedAt: {
+    type: Date,
+    default: null
+  },
+  
+  evaluatedAt: {
+    type: Date,
+    default: null
+  },
+  
   // Teacher who reviewed/finalized (if applicable)
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,
