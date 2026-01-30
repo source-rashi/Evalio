@@ -267,31 +267,87 @@ async function startWorker() {
     }
   });
   
-  // Worker event handlers
+  // Worker event handlers for monitoring
+  // These provide visibility into job processing and failures
+  
   worker.on('completed', (job, result) => {
-    console.log(`\n✨ Job ${job.id} completed successfully`);
+    const jobLogger = job.data.correlationId
+      ? logger.createChild({ correlationId: job.data.correlationId, jobId: job.id })
+      : logger.createChild({ jobId: job.id });
+    
+    jobLogger.info({
+      jobId: job.id,
+      submissionId: job.data.submissionId,
+      duration: job.finishedOn - job.processedOn,
+      attempts: job.attemptsMade,
+      result: {
+        evaluationId: result.evaluationId,
+        totalScore: result.totalScore,
+        maxScore: result.maxScore,
+        questionCount: result.questionCount
+      }
+    }, 'Job completed successfully');
   });
   
   worker.on('failed', (job, error) => {
-    console.error(`\n💥 Job ${job.id} failed after ${job.attemptsMade} attempts`);
-    console.error(`   Error: ${error.message}`);
+    const jobLogger = job.data.correlationId
+      ? logger.createChild({ correlationId: job.data.correlationId, jobId: job.id })
+      : logger.createChild({ jobId: job.id });
+    
+    // Log detailed failure information
+    jobLogger.error({
+      jobId: job.id,
+      submissionId: job.data.submissionId,
+      examId: job.data.examId,
+      studentId: job.data.studentId,
+      attemptsMade: job.attemptsMade,
+      maxAttempts: 3,
+      willRetry: job.attemptsMade < 3,
+      failedAt: new Date(job.failedReason?.failedAt || Date.now()),
+      error: {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      },
+      jobData: job.data
+    }, 'Job failed');
+    
+    // If this was the final attempt, log as critical
+    if (job.attemptsMade >= 3) {
+      jobLogger.error({
+        jobId: job.id,
+        submissionId: job.data.submissionId,
+        finalError: error.message
+      }, 'Job permanently failed after all retry attempts');
+    }
   });
   
   worker.on('error', (error) => {
-    console.error('❌ Worker Error:', error.message);
+    logger.error({ err: error }, 'Worker error');
   });
   
-  console.log('✅ Worker is running and waiting for jobs...');
-  console.log('📊 Concurrency:', 5);
-  console.log('🔄 Retry attempts:', 3);
-  console.log('\nPress Ctrl+C to stop\n');
+  // Log stalled jobs (jobs that haven't progressed)
+  worker.on('stalled', (jobId) => {
+    logger.warn({ jobId }, 'Job stalled - may have crashed');
+  });
+  
+  // Log when worker is ready
+  worker.on('ready', () => {
+    logger.info({
+      concurrency: 5,
+      maxRetries: 3,
+      rateLimit: '10 jobs/second'
+    }, 'Worker ready and waiting for jobs');
+  });
+  
+  logger.info('Evaluation worker started');
   
   // Graceful shutdown
   const shutdown = async (signal) => {
-    console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+    logger.info({ signal }, 'Shutting down worker gracefully');
     await worker.close();
     await mongoose.connection.close();
-    console.log('✅ Worker stopped');
+    logger.info('Worker stopped');
     process.exit(0);
   };
   
@@ -304,7 +360,7 @@ async function startWorker() {
 // Start worker if this file is run directly
 if (require.main === module) {
   startWorker().catch((error) => {
-    console.error('💥 Failed to start worker:', error.message);
+    logger.error({ err: error }, 'Failed to start worker');
     process.exit(1);
   });
 }

@@ -57,6 +57,7 @@ app.use('/api/ocr', require('./src/routes/ocr'));
 app.use('/api/draft', require('./src/routes/draft'));
 app.use('/api/teacher', require('./src/routes/teacher-submissions'));
 app.use('/api/migration', require('./src/routes/migration'));
+app.use('/api/queue', require('./src/routes/queue')); // Queue monitoring
 
 // Error handling middleware - MUST be last
 app.use(notFoundHandler);  // 404 handler for undefined routes
