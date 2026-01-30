@@ -45,6 +45,7 @@ app.use('/api/teacher', require('./src/routes/teacher'));
 app.use('/api/exam', require('./src/routes/exam'));
 app.use('/api/submission', require('./src/routes/submission'));
 app.use('/api/evaluate', require('./src/routes/evaluate'));
+app.use('/api/evaluation', require('./src/routes/override'));
 app.use('/api/student', require('./src/routes/student'));
 app.use('/api/ocr', require('./src/routes/ocr'));
 app.use('/api/draft', require('./src/routes/draft'));
