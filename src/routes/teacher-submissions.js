@@ -8,11 +8,13 @@ const Evaluation = require('../models/Evaluation');
 const Student = require('../models/Student');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
 const ROLES = require('../constants/roles');
+const { getPaginationParams, buildPaginationResponse } = require('../utils/pagination');
 
-// GET /api/teacher/submissions?examId=...
+// GET /api/teacher/submissions?examId=...&page=1&limit=20
 router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
     const { examId } = req.query;
+    const { page, limit, skip } = getPaginationParams(req);
     
     let query = { status: { $in: [SUBMISSION_STATUS.FINALIZED, SUBMISSION_STATUS.EVALUATED] } };
     
@@ -31,10 +33,15 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
     }
     
     // Only show finalized or evaluated submissions (not drafts)
-    const subs = await Submission.find(query)
-      .populate('student_id', 'name email')
-      .populate('exam_id', 'title subject')
-      .sort({ createdAt: -1 });
+    const [subs, total] = await Promise.all([
+      Submission.find(query)
+        .populate('student_id', 'name email')
+        .populate('exam_id', 'title subject')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Submission.countDocuments(query)
+    ]);
     
     console.log(`Found ${subs.length} submissions ${examId ? `for exam ${examId}` : 'for all exams'} with status finalized/evaluated`);
     
@@ -52,7 +59,9 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
       totalScore: evalMap.get(String(s._id))?.totalScore ?? null,
       maxScore: evalMap.get(String(s._id))?.maxScore ?? null,
     }));
-    res.json({ ok: true, submissions: data });
+    
+    const response = buildPaginationResponse(data, total, page, limit);
+    res.json({ ok: true, submissions: response.items, pagination: response.pagination });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -61,8 +70,15 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
 // GET /api/teacher/students - Get all students for assignment
 router.get('/students', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
-    const students = await Student.find({}).select('_id name email').sort({ name: 1 });
-    res.json({ ok: true, students });
+    const { page, limit, skip } = getPaginationParams(req);
+    
+    const [students, total] = await Promise.all([
+      Student.find({}).select('_id name email').sort({ name: 1 }).skip(skip).limit(limit),
+      Student.countDocuments({})
+    ]);
+    
+    const response = buildPaginationResponse(students, total, page, limit);
+    res.json({ ok: true, students: response.items, pagination: response.pagination });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

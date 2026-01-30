@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const { body, param, validationResult } = require('express-validator');
 const ROLES = require('../constants/roles');
+const { getPaginationParams, buildPaginationResponse } = require('../utils/pagination');
 
 router.post('/create', auth, requireRole(ROLES.TEACHER),
   body('title').isLength({ min: 2 }).withMessage('Title required'),
@@ -26,8 +27,16 @@ router.post('/create', auth, requireRole(ROLES.TEACHER),
 // List exams for current teacher
 router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
   try {
-    const exams = await Exam.find({ teacher_id: req.user.id }).populate('questions');
-    res.json({ ok: true, exams });
+    const { page, limit, skip } = getPaginationParams(req);
+    const query = { teacher_id: req.user.id };
+    
+    const [exams, total] = await Promise.all([
+      Exam.find(query).populate('questions').skip(skip).limit(limit).sort({ createdAt: -1 }),
+      Exam.countDocuments(query)
+    ]);
+    
+    const response = buildPaginationResponse(exams, total, page, limit);
+    res.json({ ok: true, exams: response.items, pagination: response.pagination });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -37,6 +46,8 @@ router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
 router.get('/student/list', async (req, res) => {
   try {
     const { studentId } = req.query;
+    const { page, limit, skip } = getPaginationParams(req);
+    
     let query = { isPublic: true }; // Default: show public exams
     
     if (studentId) {
@@ -49,8 +60,13 @@ router.get('/student/list', async (req, res) => {
       };
     }
     
-    const exams = await Exam.find(query).populate('questions');
-    res.json({ ok: true, exams });
+    const [exams, total] = await Promise.all([
+      Exam.find(query).populate('questions').skip(skip).limit(limit).sort({ createdAt: -1 }),
+      Exam.countDocuments(query)
+    ]);
+    
+    const response = buildPaginationResponse(exams, total, page, limit);
+    res.json({ ok: true, exams: response.items, pagination: response.pagination });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
