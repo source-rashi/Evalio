@@ -12,6 +12,10 @@ const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const ROLES = require('../constants/roles');
 
+// ML Integration Components (not yet used in this route)
+// const { evaluateAnswers } = require('../services/mlAdapter');
+// const { validateAndSanitize } = require('../validators/mlResultValidator');
+
 // Get evaluation for a submission
 router.get('/:submissionId', param('submissionId').isMongoId(), async (req, res) => {
   const errors = validationResult(req);
@@ -111,6 +115,43 @@ router.post('/:submissionId', auth, requireRole(ROLES.TEACHER), evalLimiter, par
     const totalScore = results.reduce((sum, r) => sum + (r.finalScore || 0), 0);
     
     console.log(`Evaluation complete: ${totalScore}/${maxScore} (${results.length} questions)`);
+    
+    // TODO: Future ML Integration Point
+    // When ML system is ready, replace gradeAnswer() loop above with:
+    //
+    // const mlInput = {
+    //   submission: submission,
+    //   exam: examDoc,
+    //   questions: qDocs,
+    //   answers: submission.answers
+    // };
+    //
+    // try {
+    //   // Call ML adapter
+    //   const mlResult = await evaluateAnswers(mlInput);
+    //   
+    //   // CRITICAL: Validate ML output before using it
+    //   const validatedResult = validateAndSanitize(mlResult, {
+    //     expectedQuestionCount: qDocs.length,
+    //     expectedQuestionIds: qDocs.map(q => q._id)
+    //   });
+    //   
+    //   // Use validated ML results
+    //   results = validatedResult.results;
+    //   aiTotalScore = validatedResult.aiTotalScore;
+    //   totalScore = validatedResult.aiTotalScore;
+    //   averageConfidence = validatedResult.averageConfidence;
+    // } catch (error) {
+    //   if (error instanceof MLResultValidationError) {
+    //     console.error('ML validation failed:', error.validationErrors);
+    //     return res.status(422).json({
+    //       ok: false,
+    //       error: 'ML evaluation produced invalid results',
+    //       validationErrors: error.validationErrors
+    //     });
+    //   }
+    //   throw error; // Re-throw unexpected errors
+    // }
     
     // Create evaluation with new schema
     // Status: PENDING → AI_EVALUATED (first lifecycle transition)
