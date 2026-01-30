@@ -63,4 +63,10 @@ app.use('/api/queue', require('./src/routes/queue')); // Queue monitoring
 app.use(notFoundHandler);  // 404 handler for undefined routes
 app.use(errorHandler);     // Centralized error handler
 
-app.listen(PORT, () => logger.info('Server started', { port: PORT }));
+// Export app for testing before calling listen
+module.exports = app;
+
+// Only listen if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => logger.info('Server started', { port: PORT }));
+}

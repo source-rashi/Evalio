@@ -11,11 +11,12 @@ process.env.NODE_ENV = 'test';
 // Use in-memory MongoDB or separate test database
 const TEST_DB_URI = process.env.TEST_MONGODB_URI || 'mongodb://localhost:27017/evalio_test';
 
-// Disable external services in tests
-process.env.CLOUDINARY_URL = 'test://cloudinary';
+// Disable external services in tests - must be set BEFORE any imports
+process.env.CLOUDINARY_URL = 'cloudinary://test:test@test';
 process.env.REDIS_HOST = 'localhost';
 process.env.REDIS_PORT = '6379';
 process.env.JWT_SECRET = 'test_jwt_secret_key_2025';
+process.env.GEMINI_API_KEY = 'test_gemini_key';
 
 // Suppress console logs during tests (optional)
 if (process.env.SUPPRESS_TEST_LOGS === 'true') {
