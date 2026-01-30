@@ -32,6 +32,7 @@ const Question = require('../models/Question');
 const Exam = require('../models/Exam');
 const { EVALUATION_STATUS } = require('../constants/evaluationStatus');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
+const logger = require('../utils/logger');
 
 // ML Integration Services (Phase 5C)
 const { buildMLInput, validateMLInput, getMLInputStats } = require('../services/mlInputBuilder');
@@ -60,7 +61,7 @@ async function connectDatabase() {
   }
   
   await mongoose.connect(mongoUri);
-  console.log('✅ Worker connected to MongoDB');
+  logger.info('Worker connected to MongoDB');
 }
 
 /**
@@ -90,8 +91,7 @@ async function connectDatabase() {
 async function processEvaluation(job) {
   const { submissionId, examId, studentId } = job.data;
   
-  console.log(`📝 Processing evaluation for submission: ${submissionId}`);
-  console.log(`   Exam: ${examId}, Student: ${studentId}`);
+  logger.info({ submissionId, examId, studentId }, 'Processing evaluation');
   
   // Update evaluation status to "processing"
   await Evaluation.findOneAndUpdate(
@@ -111,7 +111,7 @@ async function processEvaluation(job) {
     throw new Error(`Submission not found: ${submissionId}`);
   }
   
-  console.log(`   Found ${submission.answers.length} answers to evaluate`);
+  logger.debug({ answerCount: submission.answers.length }, 'Found answers to evaluate');
   await job.updateProgress(15);
   
   // Step 2: Fetch exam details
@@ -121,7 +121,7 @@ async function processEvaluation(job) {
     throw new Error(`Exam not found: ${examId}`);
   }
   
-  console.log(`   Exam: ${exam.title}`);
+  logger.debug({ examTitle: exam.title }, 'Exam details fetched');
   await job.updateProgress(20);
   
   // Step 3: Fetch all questions for this exam
@@ -132,7 +132,7 @@ async function processEvaluation(job) {
     throw new Error(`No questions found for exam: ${examId}`);
   }
   
-  console.log(`   Found ${questions.length} questions`);
+  logger.debug({ questionCount: questions.length }, 'Questions fetched');
   await job.updateProgress(30);
   
   // Step 4: Build ML input
@@ -150,16 +150,16 @@ async function processEvaluation(job) {
   }
   
   const inputStats = getMLInputStats(mlInput);
-  console.log(`   ML Input prepared:`, inputStats);
+  logger.debug({ inputStats }, 'ML input prepared');
   await job.updateProgress(40);
   
   // Step 5: Execute Python ML engine
-  console.log(`   🤖 Executing Python ML engine...`);
+  logger.info('Executing Python ML engine');
   const mlResult = await executePythonML(mlInput, {
     timeout: 60000 // 60 second timeout for ML execution
   });
   
-  console.log(`   ✅ ML execution complete`);
+  logger.info('ML execution complete');
   await job.updateProgress(70);
   
   // Step 6: Map ML output to Evaluation model
@@ -171,7 +171,7 @@ async function processEvaluation(job) {
   });
   
   const evalStats = calculateEvaluationStats(evaluationData);
-  console.log(`   📊 Evaluation stats:`, evalStats);
+  logger.debug({ evalStats }, 'Evaluation statistics calculated');
   await job.updateProgress(80);
   
   // Step 7: Save evaluation to database
@@ -181,7 +181,7 @@ async function processEvaluation(job) {
     { upsert: true, new: true }
   );
   
-  console.log(`   ✅ Evaluation saved: ${evaluation._id}`);
+  logger.info({ evaluationId: evaluation._id }, 'Evaluation saved to database');
   await job.updateProgress(90);
   
   // Step 8: Update submission status and mark job as completed
@@ -196,8 +196,11 @@ async function processEvaluation(job) {
   
   await job.updateProgress(100);
   
-  console.log(`   ✅ Submission ${submissionId} evaluated successfully`);
-  console.log(`   Total Score: ${evaluationData.aiTotalScore}/${evalStats.maxPossibleScore}`);
+  logger.info({
+    submissionId,
+    totalScore: evaluationData.aiTotalScore,
+    maxScore: evalStats.maxPossibleScore
+  }, 'Evaluation completed successfully');
   
   return {
     evaluationId: evaluation._id,
@@ -214,26 +217,23 @@ async function processEvaluation(job) {
  * Create and start the evaluation worker
  */
 async function startWorker() {
-  console.log('🚀 Starting Evaluation Worker...');
-  console.log('📡 Redis:', `${redisConfig.host}:${redisConfig.port}`);
+  logger.info('Starting Evaluation Worker');
+  logger.info({ redis: `${redisConfig.host}:${redisConfig.port}` }, 'Redis configuration');
   
   // Connect to database first
   await connectDatabase();
   
   // Create worker instance
   const worker = new Worker('evaluation', async (job) => {
-    console.log(`\n🔄 Job Started: ${job.id}`);
-    console.log(`   Data:`, job.data);
+    logger.logJob(job, 'Job started');
     
     try {
       const result = await processEvaluation(job);
-      console.log(`✅ Job Completed: ${job.id}`);
-      console.log(`   Result:`, result);
+      logger.logJob(job, 'Job completed', { result });
       return result;
       
     } catch (error) {
-      console.error(`❌ Job Failed: ${job.id}`);
-      console.error(`   Error: ${error.message}`);
+      logger.logError(error, 'Job failed', { jobId: job.id, data: job.data });
       
       // Update evaluation to mark job as failed
       const { submissionId } = job.data;

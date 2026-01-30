@@ -19,6 +19,7 @@
  */
 
 const { Queue } = require('bullmq');
+const logger = require('../utils/logger');
 
 /**
  * Redis connection configuration
@@ -39,12 +40,12 @@ const redisConfig = {
 };
 
 // Log Redis configuration (hide password)
-console.log('📡 Redis Configuration:', {
+logger.info({
   host: redisConfig.host,
   port: redisConfig.port,
   db: redisConfig.db,
   hasPassword: !!redisConfig.password
-});
+}, 'Redis configuration');
 
 /**
  * Evaluation Queue
@@ -89,11 +90,11 @@ const evaluationQueue = new Queue('evaluation', {
  * In production, these would send metrics to monitoring systems.
  */
 evaluationQueue.on('error', (error) => {
-  console.error('❌ Evaluation Queue Error:', error.message);
+  logger.error({ err: error }, 'Evaluation queue error');
 });
 
 evaluationQueue.on('waiting', (jobId) => {
-  console.log(`⏳ Evaluation Job Waiting: ${jobId}`);
+  logger.debug({ jobId }, 'Job waiting in queue');
 });
 
 /**
@@ -103,15 +104,15 @@ evaluationQueue.on('waiting', (jobId) => {
  * Prevents job data corruption.
  */
 process.on('SIGTERM', async () => {
-  console.log('🛑 Closing evaluation queue...');
+  logger.info('Closing evaluation queue (SIGTERM)');
   await evaluationQueue.close();
-  console.log('✅ Evaluation queue closed');
+  logger.info('Evaluation queue closed');
 });
 
 process.on('SIGINT', async () => {
-  console.log('🛑 Closing evaluation queue...');
+  logger.info('Closing evaluation queue (SIGINT)');
   await evaluationQueue.close();
-  console.log('✅ Evaluation queue closed');
+  logger.info('Evaluation queue closed');
 });
 
 module.exports = evaluationQueue;
