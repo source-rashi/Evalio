@@ -5,6 +5,7 @@ const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const logger = require('./src/utils/logger');
 const correlationIdMiddleware = require('./src/middleware/correlationId');
+const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
 
 dotenv.config();
 
@@ -56,5 +57,9 @@ app.use('/api/ocr', require('./src/routes/ocr'));
 app.use('/api/draft', require('./src/routes/draft'));
 app.use('/api/teacher', require('./src/routes/teacher-submissions'));
 app.use('/api/migration', require('./src/routes/migration'));
+
+// Error handling middleware - MUST be last
+app.use(notFoundHandler);  // 404 handler for undefined routes
+app.use(errorHandler);     // Centralized error handler
 
 app.listen(PORT, () => logger.info('Server started', { port: PORT }));
