@@ -74,7 +74,8 @@ async function connectDatabase() {
  *   submissionId: String,   // MongoDB ObjectId as string
  *   examId: String,
  *   studentId: String,
- *   triggeredBy: String
+ *   triggeredBy: String,
+ *   correlationId: String   // Request tracing ID
  * }
  * 
  * ML Pipeline Steps:
@@ -89,9 +90,14 @@ async function connectDatabase() {
  * @returns {Object} Evaluation result summary
  */
 async function processEvaluation(job) {
-  const { submissionId, examId, studentId } = job.data;
+  const { submissionId, examId, studentId, correlationId } = job.data;
   
-  logger.info({ submissionId, examId, studentId }, 'Processing evaluation');
+  // Create child logger with correlationId for request tracing
+  const jobLogger = correlationId 
+    ? logger.createChild({ correlationId, jobId: job.id })
+    : logger.createChild({ jobId: job.id });
+  
+  jobLogger.info({ submissionId, examId, studentId }, 'Processing evaluation');
   
   // Update evaluation status to "processing"
   await Evaluation.findOneAndUpdate(
@@ -111,7 +117,7 @@ async function processEvaluation(job) {
     throw new Error(`Submission not found: ${submissionId}`);
   }
   
-  logger.debug({ answerCount: submission.answers.length }, 'Found answers to evaluate');
+  jobLogger.debug({ answerCount: submission.answers.length }, 'Found answers to evaluate');
   await job.updateProgress(15);
   
   // Step 2: Fetch exam details
@@ -121,7 +127,7 @@ async function processEvaluation(job) {
     throw new Error(`Exam not found: ${examId}`);
   }
   
-  logger.debug({ examTitle: exam.title }, 'Exam details fetched');
+  jobLogger.debug({ examTitle: exam.title }, 'Exam details fetched');
   await job.updateProgress(20);
   
   // Step 3: Fetch all questions for this exam
@@ -132,7 +138,7 @@ async function processEvaluation(job) {
     throw new Error(`No questions found for exam: ${examId}`);
   }
   
-  logger.debug({ questionCount: questions.length }, 'Questions fetched');
+  jobLogger.debug({ questionCount: questions.length }, 'Questions fetched');
   await job.updateProgress(30);
   
   // Step 4: Build ML input
@@ -150,16 +156,16 @@ async function processEvaluation(job) {
   }
   
   const inputStats = getMLInputStats(mlInput);
-  logger.debug({ inputStats }, 'ML input prepared');
+  jobLogger.debug({ inputStats }, 'ML input prepared');
   await job.updateProgress(40);
   
   // Step 5: Execute Python ML engine
-  logger.info('Executing Python ML engine');
+  jobLogger.info('Executing Python ML engine');
   const mlResult = await executePythonML(mlInput, {
     timeout: 60000 // 60 second timeout for ML execution
   });
   
-  logger.info('ML execution complete');
+  jobLogger.info('ML execution complete');
   await job.updateProgress(70);
   
   // Step 6: Map ML output to Evaluation model
@@ -171,7 +177,7 @@ async function processEvaluation(job) {
   });
   
   const evalStats = calculateEvaluationStats(evaluationData);
-  logger.debug({ evalStats }, 'Evaluation statistics calculated');
+  jobLogger.debug({ evalStats }, 'Evaluation statistics calculated');
   await job.updateProgress(80);
   
   // Step 7: Save evaluation to database
@@ -181,7 +187,7 @@ async function processEvaluation(job) {
     { upsert: true, new: true }
   );
   
-  logger.info({ evaluationId: evaluation._id }, 'Evaluation saved to database');
+  jobLogger.info({ evaluationId: evaluation._id }, 'Evaluation saved to database');
   await job.updateProgress(90);
   
   // Step 8: Update submission status and mark job as completed
@@ -196,7 +202,7 @@ async function processEvaluation(job) {
   
   await job.updateProgress(100);
   
-  logger.info({
+  jobLogger.info({
     submissionId,
     totalScore: evaluationData.aiTotalScore,
     maxScore: evalStats.maxPossibleScore
@@ -225,15 +231,20 @@ async function startWorker() {
   
   // Create worker instance
   const worker = new Worker('evaluation', async (job) => {
-    logger.logJob(job, 'Job started');
+    // Create child logger with correlationId if available
+    const jobLogger = job.data.correlationId
+      ? logger.createChild({ correlationId: job.data.correlationId, jobId: job.id })
+      : logger.createChild({ jobId: job.id });
+    
+    jobLogger.logJob(job, 'Job started');
     
     try {
       const result = await processEvaluation(job);
-      logger.logJob(job, 'Job completed', { result });
+      jobLogger.logJob(job, 'Job completed', { result });
       return result;
       
     } catch (error) {
-      logger.logError(error, 'Job failed', { jobId: job.id, data: job.data });
+      jobLogger.logError(error, 'Job failed', { data: job.data });
       
       // Update evaluation to mark job as failed
       const { submissionId } = job.data;

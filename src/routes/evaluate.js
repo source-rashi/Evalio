@@ -116,13 +116,14 @@ router.post('/:submissionId', auth, requireRole(ROLES.TEACHER), evalLimiter, par
       submissionId: req.params.submissionId,
       examId: submission.exam_id,
       studentId: submission.student_id,
-      triggeredBy: req.user.userId // Teacher who triggered evaluation
+      triggeredBy: req.user.userId, // Teacher who triggered evaluation
+      correlationId: req.correlationId // Pass correlation ID to worker
     }, {
       priority: req.body.priority || 5, // Default priority
       jobId: `eval-${req.params.submissionId}-${Date.now()}` // Unique job ID
     });
 
-    console.log(`📤 Evaluation job enqueued: ${job.id} for submission ${req.params.submissionId}`);
+    req.logger.info({ jobId: job.id, submissionId: req.params.submissionId }, 'Evaluation job enqueued');
 
     // Create or update Evaluation document with PENDING status
     const evaluation = await Evaluation.findOneAndUpdate(
@@ -148,8 +149,7 @@ router.post('/:submissionId', auth, requireRole(ROLES.TEACHER), evalLimiter, par
     });
 
   } catch (err) {
-    console.error('❌ Evaluation POST error:', err.message);
-    console.error('Stack:', err.stack);
+    req.logger.error({ err }, 'Evaluation POST error');
     res.status(500).json({ ok: false, error: err.message });
   }
 });

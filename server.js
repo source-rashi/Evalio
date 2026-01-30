@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const logger = require('./src/utils/logger');
+const correlationIdMiddleware = require('./src/middleware/correlationId');
 
 dotenv.config();
 
@@ -23,6 +24,9 @@ function buildCorsOrigin() {
 }
 app.use(cors({ origin: buildCorsOrigin() }));
 app.use(express.json());
+
+// Correlation ID middleware - must be before routes
+app.use(correlationIdMiddleware);
 
 const PORT = process.env.PORT || 5000;
 
