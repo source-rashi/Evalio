@@ -3,6 +3,7 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
+const User = require('../models/User');
 const Student = require('../models/Student');
 const Evaluation = require('../models/Evaluation');
 const auth = require('../middleware/auth');
@@ -35,14 +36,14 @@ router.post('/register',
       const { name, email, password } = req.body;
       
       // Check if student already exists
-      const existingStudent = await Student.findOne({ email });
-      if (existingStudent) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
         return res.status(400).json({ ok: false, error: 'Email already registered' });
       }
 
-      // Create new student
-      const student = new Student({ name, email, password });
-      await student.save();
+      // Create new user with student role
+      const user = new User({ name, email, password, role: ROLES.STUDENT });
+      await user.save();
 
       res.json({ ok: true, message: 'Student registered successfully' });
     } catch (err) {
@@ -100,11 +101,11 @@ router.post('/login',
 // Get student profile (auth-protected)
 router.get('/me', auth, async (req, res) => {
   try {
-    const student = await Student.findById(req.user.id).select('-password');
-    if (!student) {
+    const user = await User.findById(req.user.id || req.user.userId).select('-password');
+    if (!user || user.role !== ROLES.STUDENT) {
       return res.status(404).json({ ok: false, error: 'Student not found' });
     }
-    res.json({ ok: true, student });
+    res.json({ ok: true, student: { id: user._id, name: user.name, email: user.email, createdAt: user.createdAt } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

@@ -3,8 +3,10 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { authLimiter } = require('../middleware/rateLimit');
+const User = require('../models/User');
 const Teacher = require('../models/Teacher');
 const auth = require('../middleware/auth');
+const ROLES = require('../constants/roles');
 
 // Register (simplified)
 router.post('/register', authLimiter,
@@ -16,11 +18,11 @@ router.post('/register', authLimiter,
     if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: errors.array()[0].msg });
     const { name, email, password } = req.body;
     try {
-      const exists = await Teacher.findOne({ email });
+      const exists = await User.findOne({ email });
       if (exists) return res.status(400).json({ ok: false, error: 'Email already registered' });
-      const t = new Teacher({ name, email, password });
-      await t.save();
-      res.json({ ok: true, teacher: { id: t._id, name: t.name, email: t.email } });
+      const user = new User({ name, email, password, role: ROLES.TEACHER });
+      await user.save();
+      res.json({ ok: true, teacher: { id: user._id, name: user.name, email: user.email } });
     } catch (err) {
       res.status(400).json({ ok: false, error: err.message });
     }
@@ -36,12 +38,16 @@ router.post('/login', authLimiter,
     if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: errors.array()[0].msg });
     const { email, password } = req.body;
     try {
-      const t = await Teacher.findOne({ email });
-      if (!t) return res.status(400).json({ ok: false, error: 'Invalid credentials' });
-      const match = await t.comparePassword(password);
+      const user = await User.findOne({ email, role: ROLES.TEACHER });
+      if (!user) return res.status(400).json({ ok: false, error: 'Invalid credentials' });
+      const match = await user.comparePassword(password);
       if (!match) return res.status(400).json({ ok: false, error: 'Invalid credentials' });
-      const token = jwt.sign({ id: t._id, email: t.email }, process.env.JWT_SECRET || 'devsecret', { expiresIn: '7d' });
-      res.json({ ok: true, token, teacher: { id: t._id, name: t.name, email: t.email } });
+      const token = jwt.sign(
+        { userId: user._id, email: user.email, role: user.role },
+        process.env.JWT_SECRET || 'devsecret',
+        { expiresIn: '7d' }
+      );
+      res.json({ ok: true, token, teacher: { id: user._id, name: user.name, email: user.email } });
     } catch (err) {
       res.status(400).json({ ok: false, error: err.message });
     }
@@ -53,9 +59,9 @@ module.exports = router;
 // Get current teacher profile (auth required)
 router.get('/me', auth, async (req, res) => {
   try {
-    const t = await Teacher.findById(req.user.id).select('name email createdAt');
-    if (!t) return res.status(404).json({ ok: false, error: 'Not found' });
-    res.json({ ok: true, teacher: { id: t._id, name: t.name, email: t.email, createdAt: t.createdAt } });
+    const user = await User.findById(req.user.id || req.user.userId).select('name email role createdAt');
+    if (!user || user.role !== ROLES.TEACHER) return res.status(404).json({ ok: false, error: 'Not found' });
+    res.json({ ok: true, teacher: { id: user._id, name: user.name, email: user.email, createdAt: user.createdAt } });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
