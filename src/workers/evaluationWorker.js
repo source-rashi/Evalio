@@ -29,9 +29,14 @@ const mongoose = require('mongoose');
 const Submission = require('../models/Submission');
 const Evaluation = require('../models/Evaluation');
 const Question = require('../models/Question');
-const { gradeAnswer } = require('../services/grading');
+const Exam = require('../models/Exam');
 const { EVALUATION_STATUS } = require('../constants/evaluationStatus');
 const { SUBMISSION_STATUS } = require('../constants/submissionStatus');
+
+// ML Integration Services (Phase 5C)
+const { buildMLInput, validateMLInput, getMLInputStats } = require('../services/mlInputBuilder');
+const { executePythonML } = require('../services/pythonMLExecutor');
+const { mapMLResultToEvaluation, calculateEvaluationStats } = require('../services/mlOutputMapper');
 
 // Redis configuration (must match queue configuration)
 const redisConfig = {
@@ -61,7 +66,7 @@ async function connectDatabase() {
 /**
  * Process a single evaluation job
  * 
- * This function contains the core evaluation logic.
+ * This function contains the core evaluation logic using the ML pipeline.
  * 
  * Job data structure:
  * {
@@ -71,12 +76,13 @@ async function connectDatabase() {
  *   triggeredBy: String
  * }
  * 
- * Steps:
- * 1. Fetch submission from database
- * 2. Fetch related questions
- * 3. Grade each answer (currently uses grading.js, will use ML later)
- * 4. Create/update Evaluation document
- * 5. Update submission status
+ * ML Pipeline Steps:
+ * 1. Fetch submission, exam, and questions from database
+ * 2. Build ML input using mlInputBuilder
+ * 3. Execute Python ML engine using pythonMLExecutor
+ * 4. Map ML output to Evaluation using mlOutputMapper
+ * 5. Save evaluation to database
+ * 6. Update submission status
  * 
  * @param {Object} job - BullMQ job object
  * @returns {Object} Evaluation result summary
@@ -96,97 +102,89 @@ async function processEvaluation(job) {
     }
   );
   
-  // Update job progress
   await job.updateProgress(10);
   
-  // Step 1: Fetch submission with populated data
-  const submission = await Submission.findById(submissionId)
-    .populate('answers.questionId');
+  // Step 1: Fetch submission with answers
+  const submission = await Submission.findById(submissionId);
   
   if (!submission) {
     throw new Error(`Submission not found: ${submissionId}`);
   }
   
-  console.log(`   Found ${submission.answers.length} answers to grade`);
-  await job.updateProgress(20);
+  console.log(`   Found ${submission.answers.length} answers to evaluate`);
+  await job.updateProgress(15);
   
-  // Step 2: Fetch all questions for this exam
-  const questionIds = submission.answers.map(a => a.questionId?._id).filter(Boolean);
-  const questions = await Question.find({ _id: { $in: questionIds } });
-  const questionMap = new Map(questions.map(q => [String(q._id), q]));
+  // Step 2: Fetch exam details
+  const exam = await Exam.findById(examId);
   
-  await job.updateProgress(30);
-  
-  // Step 3: Grade each answer
-  const results = [];
-  let totalScore = 0;
-  let maxScore = 0;
-  
-  for (let i = 0; i < submission.answers.length; i++) {
-    const answer = submission.answers[i];
-    const question = questionMap.get(String(answer.questionId?._id || answer.questionId));
-    
-    if (!question) {
-      console.warn(`   ⚠️  Question not found: ${answer.questionId}`);
-      continue;
-    }
-    
-    const questionMaxScore = question.marks || 5;
-    maxScore += questionMaxScore;
-    
-    // Grade the answer (currently uses old grading service)
-    // TODO: Replace with ML adapter in future
-    const gradingResult = await gradeAnswer({
-      modelAnswer: question.modelAnswer || '',
-      studentAnswer: answer.extractedText || '',
-      maxScore: questionMaxScore,
-      keypoints: question.keypoints || []
-    });
-    
-    // Map to new evaluation schema
-    results.push({
-      questionId: answer.questionId,
-      aiScore: gradingResult.score || 0,
-      finalScore: gradingResult.score || 0,
-      maxScore: questionMaxScore,
-      aiFeedback: gradingResult.feedback || '',
-      feedback: gradingResult.feedback || '',
-      confidence: gradingResult.confidence || 0.5,
-      isOverridden: false
-    });
-    
-    totalScore += gradingResult.score || 0;
-    
-    // Update progress incrementally
-    const progress = 30 + Math.floor((i + 1) / submission.answers.length * 60);
-    await job.updateProgress(progress);
+  if (!exam) {
+    throw new Error(`Exam not found: ${examId}`);
   }
   
-  console.log(`   Grading complete: ${totalScore}/${maxScore}`);
+  console.log(`   Exam: ${exam.title}`);
+  await job.updateProgress(20);
   
-  // Step 4: Create or update Evaluation document
-  const averageConfidence = results.length > 0
-    ? results.reduce((sum, r) => sum + (r.confidence || 0), 0) / results.length
-    : 0;
+  // Step 3: Fetch all questions for this exam
+  const questionIds = submission.answers.map(a => a.question_id).filter(Boolean);
+  const questions = await Question.find({ _id: { $in: questionIds } });
   
+  if (questions.length === 0) {
+    throw new Error(`No questions found for exam: ${examId}`);
+  }
+  
+  console.log(`   Found ${questions.length} questions`);
+  await job.updateProgress(30);
+  
+  // Step 4: Build ML input
+  const mlInput = buildMLInput({
+    submission: submission.toObject(),
+    exam: exam.toObject(),
+    questions: questions.map(q => q.toObject()),
+    answers: submission.answers
+  });
+  
+  // Validate ML input structure
+  const inputValidation = validateMLInput(mlInput);
+  if (!inputValidation.valid) {
+    throw new Error(`Invalid ML input: ${inputValidation.errors.join(', ')}`);
+  }
+  
+  const inputStats = getMLInputStats(mlInput);
+  console.log(`   ML Input prepared:`, inputStats);
+  await job.updateProgress(40);
+  
+  // Step 5: Execute Python ML engine
+  console.log(`   🤖 Executing Python ML engine...`);
+  const mlResult = await executePythonML(mlInput, {
+    timeout: 60000 // 60 second timeout for ML execution
+  });
+  
+  console.log(`   ✅ ML execution complete`);
+  await job.updateProgress(70);
+  
+  // Step 6: Map ML output to Evaluation model
+  const evaluationData = mapMLResultToEvaluation(mlResult, {
+    submissionId: submissionId,
+    examId: examId,
+    expectedQuestionCount: questions.length,
+    expectedQuestionIds: questions.map(q => String(q._id))
+  });
+  
+  const evalStats = calculateEvaluationStats(evaluationData);
+  console.log(`   📊 Evaluation stats:`, evalStats);
+  await job.updateProgress(80);
+  
+  // Step 7: Save evaluation to database
   const evaluation = await Evaluation.findOneAndUpdate(
     { submission_id: submissionId },
-    {
-      submission_id: submissionId,
-      results,
-      aiTotalScore: totalScore,
-      totalScore,
-      status: EVALUATION_STATUS.AI_EVALUATED,
-      averageConfidence,
-      evaluatedAt: new Date()
-    },
+    evaluationData,
     { upsert: true, new: true }
   );
   
   console.log(`   ✅ Evaluation saved: ${evaluation._id}`);
-  await job.updateProgress(95);
+  await job.updateProgress(90);
   
-  // Step 5: Update submission status and mark job as completed
+  // Step 8: Update submission status and mark job as completed
   submission.status = SUBMISSION_STATUS.EVALUATED;
   await submission.save();
   
@@ -198,11 +196,16 @@ async function processEvaluation(job) {
   
   await job.updateProgress(100);
   
+  console.log(`   ✅ Submission ${submissionId} evaluated successfully`);
+  console.log(`   Total Score: ${evaluationData.aiTotalScore}/${evalStats.maxPossibleScore}`);
+  
   return {
     evaluationId: evaluation._id,
-    score: totalScore,
-    maxScore,
-    questionsGraded: results.length,
+    submissionId,
+    totalScore: evaluationData.aiTotalScore,
+    maxScore: evalStats.maxPossibleScore,
+    questionCount: evalStats.questionCount,
+    averageConfidence: evaluationData.averageConfidence,
     jobStatus: 'completed'
   };
 }
