@@ -6,8 +6,12 @@ const mongoose = require('mongoose');
 const logger = require('./src/utils/logger');
 const correlationIdMiddleware = require('./src/middleware/correlationId');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
+const { validateEnvironment } = require('./src/utils/validateEnv');
 
 dotenv.config();
+
+// Validate environment variables on startup (fails fast if misconfigured)
+validateEnvironment();
 
 const app = express();
 // Security headers
