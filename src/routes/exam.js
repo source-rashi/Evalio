@@ -33,7 +33,8 @@ router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
     
     const [exams, total] = await Promise.all([
       Exam.find(query)
-        .populate('questions', 'text marks')
+        .select('title subject teacher_id isPublic createdAt updatedAt questions')
+        .populate('questions', 'marks')  // Only marks, exclude text/modelAnswer/keypoints
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
@@ -67,7 +68,8 @@ router.get('/student/list', async (req, res) => {
     
     const [exams, total] = await Promise.all([
       Exam.find(query)
-        .populate('questions', 'text marks')
+        .select('title subject teacher_id isPublic createdAt updatedAt questions')
+        .populate('questions', 'marks')  // Only marks, exclude text/modelAnswer/keypoints
         .skip(skip)
         .limit(limit)
         .sort({ createdAt: -1 }),
