@@ -75,7 +75,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       
       # Authentication
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-default-jwt-secret-change-in-production-with-at-least-32-characters}
       JWT_EXPIRY: ${JWT_EXPIRY:-7d}
       
       # Cloudinary

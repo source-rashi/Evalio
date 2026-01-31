@@ -278,7 +278,64 @@ Evalio/
 
 ## 🚢 Deployment
 
-**Production Readiness Checklist:**
+### Docker Deployment (Recommended)
+
+Evalio is fully containerized and can be deployed with Docker Compose:
+
+**Quick Start:**
+
+```bash
+# 1. Configure environment
+cp .env.docker .env
+# Edit .env and set your credentials
+
+# 2. Build images
+docker build -t evalio-backend:latest .
+docker build -f Dockerfile.worker -t evalio-worker:latest .
+
+# 3. Start all services
+docker-compose up -d
+
+# 4. Verify health
+curl http://localhost:5000/health
+# Expected: {"status":"ok"}
+
+# 5. View logs
+docker-compose logs -f
+```
+
+**Docker Services:**
+- **evalio-backend**: REST API server (port 5000)
+- **evalio-worker**: Background evaluation processor
+- **mongodb**: Database with persistent storage
+- **redis**: Queue and cache
+
+**Verification Steps:**
+
+```bash
+# Check all services are running
+docker-compose ps
+
+# Test API health endpoint
+curl http://localhost:5000/health
+
+# Check worker logs for queue connection
+docker-compose logs worker
+# Should see: "Evaluation worker started" and "Worker ready and waiting for jobs"
+
+# Monitor all logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Stop and remove data volumes
+docker-compose down -v
+```
+
+For detailed Docker documentation, see [docs/DOCKER.md](docs/DOCKER.md).
+
+### Production Readiness Checklist:
 - ✅ Environment validation on startup
 - ✅ Health and readiness endpoints for orchestration
 - ✅ Structured logging with correlation IDs
@@ -289,8 +346,10 @@ Evalio/
 - ✅ Caching boundaries (Redis-ready)
 - ✅ Background job processing with retries
 - ✅ Test suite with unit and integration coverage
+- ✅ Docker containerization with multi-stage builds
+- ✅ Docker Compose orchestration
 
-**Recommended Deployment:**
+**Recommended for Production:**
 - Use Docker/containers for consistent environments
 - Redis required for production (async queue processing)
 - MongoDB with replica set for high availability
@@ -298,6 +357,9 @@ Evalio/
 - CI/CD pipeline with automated testing
 - Log aggregation (ELK, CloudWatch, DataDog)
 - Monitoring and alerting for health endpoints
+- Container orchestration (Kubernetes, Docker Swarm, AWS ECS)
+- Load balancing for API servers
+- Secrets management (HashiCorp Vault, AWS Secrets Manager)
 
 ---
 

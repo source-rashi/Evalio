@@ -4,14 +4,20 @@
 # ============================================
 FROM node:20-alpine AS dependencies
 
+# Install build dependencies for native modules (bcrypt)
+RUN apk add --no-cache python3 make g++
+
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production --ignore-scripts
+# Install production dependencies (allow build scripts for native modules like bcrypt)
+RUN npm ci --only=production
+
+# Remove build dependencies to reduce size
+RUN apk del python3 make g++
 
 # ============================================
 # Stage 2: Build
