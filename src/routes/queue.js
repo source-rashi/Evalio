@@ -12,6 +12,7 @@ const auth = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 const ROLES = require('../constants/roles');
 const { asyncHandler } = require('../middleware/errorHandler');
+const { getPaginationParams, buildPaginationResponse } = require('../utils/pagination');
 const {
   getFailedJobs,
   getJobCounts,
@@ -60,36 +61,58 @@ router.get('/stats', auth, requireRole(ROLES.TEACHER), asyncHandler(async (req, 
 /**
  * GET /api/queue/failed
  * 
- * Get list of failed jobs
+ * Get list of failed jobs with pagination
  * 
  * Query params:
- * - limit: Max number of jobs to return (default: 10)
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 20, max: 100)
  */
 router.get('/failed', auth, requireRole(ROLES.TEACHER), asyncHandler(async (req, res) => {
-  const limit = parseInt(req.query.limit) || 10;
-  const failed = await getFailedJobs(limit);
+  const { page, limit } = getPaginationParams(req);
   
+  // Get all failed jobs (queue library doesn't support pagination natively)
+  const allFailed = await getFailedJobs(1000); // Get a large batch
+  const total = allFailed.length;
+  
+  // Manual pagination
+  const skip = (page - 1) * limit;
+  const paginatedJobs = allFailed.slice(skip, skip + limit);
+  
+  const response = buildPaginationResponse(paginatedJobs, total, page, limit);
   res.json({
     ok: true,
-    count: failed.length,
-    jobs: failed
+    jobs: response.items,
+    pagination: response.pagination
   });
 }));
 
 /**
  * GET /api/queue/stuck
  * 
- * Get list of stuck/stalled jobs
+ * Get list of stuck/stalled jobs with pagination
+ * 
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 20, max: 100)
  * 
  * Returns jobs that have been processing for too long
  */
 router.get('/stuck', auth, requireRole(ROLES.TEACHER), asyncHandler(async (req, res) => {
-  const stuck = await getStuckJobs();
+  const { page, limit } = getPaginationParams(req);
   
+  // Get all stuck jobs
+  const allStuck = await getStuckJobs();
+  const total = allStuck.length;
+  
+  // Manual pagination
+  const skip = (page - 1) * limit;
+  const paginatedJobs = allStuck.slice(skip, skip + limit);
+  
+  const response = buildPaginationResponse(paginatedJobs, total, page, limit);
   res.json({
     ok: true,
-    count: stuck.length,
-    jobs: stuck
+    jobs: response.items,
+    pagination: response.pagination
   });
 }));
 
