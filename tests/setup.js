@@ -4,19 +4,36 @@
  */
 
 const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+const path = require('path');
 
-// Prevent tests from touching production database
+// Load test environment variables FIRST
+dotenv.config({ path: path.resolve(__dirname, '../.env.test') });
+
+// Critical safety check: Prevent tests from touching production database
+if (process.env.NODE_ENV !== 'test') {
+  console.error('❌ CRITICAL: Tests must run with NODE_ENV=test');
+  process.exit(1);
+}
+
+// Force test environment
 process.env.NODE_ENV = 'test';
 
-// Use in-memory MongoDB or separate test database
+// Use test database - NEVER production
 const TEST_DB_URI = process.env.TEST_MONGODB_URI || 'mongodb://localhost:27017/evalio_test';
 
-// Disable external services in tests - must be set BEFORE any imports
-process.env.CLOUDINARY_URL = 'cloudinary://test:test@test';
-process.env.REDIS_HOST = 'localhost';
-process.env.REDIS_PORT = '6379';
-process.env.JWT_SECRET = 'test_jwt_secret_key_2025';
-process.env.GEMINI_API_KEY = 'test_gemini_key';
+// Safety check: Ensure we're not using production database
+if (TEST_DB_URI.includes('evalio') && !TEST_DB_URI.includes('test')) {
+  console.error('❌ CRITICAL: Test database URI must include "test" to prevent production data loss');
+  console.error(`Current URI: ${TEST_DB_URI}`);
+  process.exit(1);
+}
+
+// Configure test-only service mocks
+process.env.CLOUDINARY_URL = process.env.CLOUDINARY_URL || 'cloudinary://test:test@test';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_key_2025';
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'test_gemini_key';
+process.env.AI_PROVIDER = 'none';  // Disable AI in tests
 
 // Suppress console logs during tests (optional)
 if (process.env.SUPPRESS_TEST_LOGS === 'true') {

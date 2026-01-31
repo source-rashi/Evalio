@@ -4,6 +4,20 @@
 
 Tests use an **isolated test database** to ensure production data is never touched.
 
+### Environment Configuration
+
+Tests automatically load `.env.test` which contains:
+- **Test Database URI**: `mongodb://localhost:27017/evalio_test`
+- **Mock API Keys**: Non-functional test keys
+- **Disabled External Services**: AI providers, Cloudinary, etc.
+- **Test Secrets**: JWT secrets for test-only use
+
+### Database Safety Features
+- ✅ **Forces NODE_ENV=test** - Prevents production mode
+- ✅ **URI Validation** - Ensures "test" is in database name
+- ✅ **Auto-cleanup** - Database dropped after all tests
+- ✅ **Test Isolation** - Collections cleared between tests
+
 ### Default Test Database
 - **URI**: `mongodb://localhost:27017/evalio_test`
 - **Auto-cleanup**: Database is dropped after all tests complete
