@@ -5,8 +5,12 @@
 
 FROM node:20-alpine AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init python3 py3-pip
+# Install dumb-init, Python, and build dependencies for scikit-learn
+RUN apk add --no-cache dumb-init python3 py3-pip \
+    # Build dependencies (temporary)
+    gcc g++ musl-dev python3-dev linux-headers \
+    # Runtime dependencies for numpy/scikit-learn
+    openblas-dev lapack-dev
 
 # Create app user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -26,7 +30,9 @@ COPY --chown=nodejs:nodejs . .
 
 # Install Python ML dependencies
 COPY ml/requirements.txt ./ml/
-RUN pip3 install --no-cache-dir -r ml/requirements.txt --break-system-packages
+RUN pip3 install --no-cache-dir -r ml/requirements.txt --break-system-packages \
+    # Remove build dependencies to reduce image size
+    && apk del gcc g++ musl-dev python3-dev linux-headers
 
 # Set environment to production
 ENV NODE_ENV=production
