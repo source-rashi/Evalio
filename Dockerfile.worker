@@ -1,0 +1,41 @@
+# ============================================
+# Dockerfile for Evaluation Worker
+# Processes background evaluation jobs
+# ============================================
+
+FROM node:20-alpine AS production
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init python3 py3-pip
+
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies
+RUN npm ci --only=production --ignore-scripts
+
+# Copy application code
+COPY --chown=nodejs:nodejs . .
+
+# Install Python ML dependencies
+COPY ml/requirements.txt ./ml/
+RUN pip3 install --no-cache-dir -r ml/requirements.txt --break-system-packages
+
+# Set environment to production
+ENV NODE_ENV=production
+
+# Switch to non-root user
+USER nodejs
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the worker
+CMD ["node", "src/workers/evaluationWorker.js"]
