@@ -1,19 +1,29 @@
 # Evalio
 
-**AI-Powered Exam Evaluation System**
+**AI-Powered Exam Evaluation System** — Production-Ready, Dockerized, and Fully Tested
 
 Evalio automates the grading of subjective exam answers using OCR (Optical Character Recognition) and NLP (Natural Language Processing). The system enables teachers to create exams, students to submit handwritten answers via image uploads, and provides AI-assisted evaluation with teacher override capabilities for quality control.
+
+**🚀 Deployment Ready:** Complete with Docker containerization, 133 automated tests, performance optimizations, and comprehensive documentation.
 
 ---
 
 ## 🎯 Key Features
 
+### Core Functionality
 - **Automated Grading**: AI evaluates subjective answers against model answers and rubric keypoints
 - **Teacher Override**: Teachers can review and adjust AI scores, preserving audit trail
 - **Background Processing**: Asynchronous evaluation queue handles long-running ML tasks
 - **OCR Integration**: Extracts handwritten text from uploaded answer sheets
 - **Flexible AI Providers**: Supports OpenAI, Gemini, or heuristic fallback grading
-- **Production-Ready**: Comprehensive error handling, logging, validation, and health checks
+
+### Production Features
+- **Docker Deployment**: Multi-container orchestration with docker-compose
+- **Comprehensive Testing**: 133 automated tests (73 unit + 60 integration)
+- **Performance Optimized**: Database indexes, pagination, payload trimming
+- **Health Monitoring**: Liveness and readiness probes for orchestration
+- **Structured Logging**: Correlation IDs and JSON logs for aggregation
+- **Security Hardened**: JWT auth, rate limiting, input validation, non-root containers
 
 ---
 
@@ -88,18 +98,24 @@ Evalio follows a **Node.js-orchestrated, Python-executed ML** pattern:
 ## 🛠️ Tech Stack
 
 **Backend:**
-- Node.js + Express.js (REST API)
-- MongoDB + Mongoose (Database & ODM)
-- Redis + BullMQ (Job queue for async processing)
-- JWT (Authentication)
-- Pino (Structured logging)
-- Jest + Supertest (Testing)
+- Node.js 20 + Express.js (REST API)
+- MongoDB 7.0 + Mongoose (Database & ODM with optimized indexes)
+- Redis 7 + BullMQ (Job queue for async processing)
+- JWT (Authentication with bcrypt password hashing)
+- Pino (Structured logging with correlation IDs)
+- Jest + Supertest (133 automated tests)
 
 **ML & AI:**
-- Python (ML evaluation engine)
+- Python 3 + scikit-learn (ML evaluation engine)
 - OpenAI GPT (Optional: AI grading)
 - Google Gemini (Optional: AI grading + OCR)
 - Heuristic fallback (Keyword matching)
+
+**Deployment:**
+- Docker + Docker Compose (Multi-container orchestration)
+- Alpine Linux (Minimal base images)
+- Multi-stage builds (Optimized image sizes)
+- Health checks (Kubernetes-ready)
 
 **External Services:**
 - Cloudinary (Image storage & CDN)
@@ -112,7 +128,71 @@ Evalio follows a **Node.js-orchestrated, Python-executed ML** pattern:
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start (Docker)
+
+### Prerequisites
+
+- Docker Engine 20.10+ or Docker Desktop
+- Docker Compose V2+
+
+### 1. Clone and Configure
+
+```bash
+git clone https://github.com/source-rashi/Evalio.git
+cd Evalio
+
+# Copy environment template
+cp .env.docker .env
+
+# Edit .env with your credentials
+# Required: JWT_SECRET (32+ chars), GEMINI_API_KEY, CLOUDINARY_URL
+```
+
+### 2. Build and Start
+
+```bash
+# Build Docker images
+docker build -t evalio-backend:latest .
+docker build -f Dockerfile.worker -t evalio-worker:latest .
+
+# Start all services (MongoDB, Redis, Backend, Worker)
+docker-compose up -d
+```
+
+### 3. Verify Deployment
+
+```bash
+# Check service status
+docker-compose ps
+
+# Test API health
+curl http://localhost:5000/health
+# Expected: {"status":"ok"}
+
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f worker
+```
+
+### 4. Access Application
+
+- **API Server:** http://localhost:5000
+- **Frontend:** Configure frontend to connect to backend
+- **MongoDB:** localhost:27017
+- **Redis:** localhost:6379
+
+### Stop Services
+
+```bash
+docker-compose down           # Stop containers
+docker-compose down -v        # Stop and remove data volumes
+```
+
+For detailed Docker documentation, see [docs/DOCKER.md](docs/DOCKER.md).
+
+---
+
+## 🛠️ Development Setup (Local)
 
 ### Prerequisites
 
@@ -224,15 +304,59 @@ Evalio/
 
 ## 🔐 Security Features
 
-- JWT-based authentication with secure token validation
-- Password hashing with bcrypt
-- Environment variable validation on startup (fails fast if misconfigured)
-- Rate limiting on sensitive endpoints
-- Input validation and sanitization
-- CORS configuration
-- Helmet.js security headers
-- Error messages don't leak sensitive information
-- Audit trail for score overrides
+- **Authentication:** JWT-based with secure token validation and bcrypt password hashing
+- **Environment Validation:** Startup checks fail fast if misconfigured (min 32-char JWT secret)
+- **Rate Limiting:** Prevents abuse on sensitive endpoints
+- **Input Validation:** Comprehensive sanitization and schema validation
+- **CORS:** Configurable origin restrictions
+- **Security Headers:** Helmet.js protection against common vulnerabilities
+- **Container Security:** Non-root users, minimal Alpine Linux base images
+- **Audit Trail:** Immutable AI scores with override tracking
+- **No Secret Leakage:** Error messages sanitized for production
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+### Test Coverage
+
+- **133 Total Tests** across unit and integration suites
+- **Unit Tests (73):** Core utilities, ML adapters, validators, pagination, scoring
+- **Integration Tests (60):** Full API workflows with isolated test database
+
+### Test Infrastructure
+
+```bash
+# Run all tests
+npm test
+
+# Run unit tests only
+npm run test:unit
+
+# Run integration tests only
+npm run test:integration
+
+# Watch mode for development
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+```
+
+### Quality Features
+
+- ✅ **Isolated Test Environment:** Separate `.env.test` with safety checks
+- ✅ **Cross-Platform:** `cross-env` for Windows/Mac/Linux compatibility
+- ✅ **Database Isolation:** Test database must contain "test" in URI
+- ✅ **Mock External Services:** Cloudinary, Gemini API mocked in tests
+- ✅ **Comprehensive Coverage:** Authentication, CRUD operations, ML contracts, error handling
+
+### Performance Optimizations
+
+- **Database Indexes:** Optimized queries on frequently accessed fields (submission_id, status)
+- **Pagination:** All list endpoints support `page` and `limit` parameters
+- **Payload Trimming:** Heavy fields (images, model answers) excluded from list responses
+- **Efficient Queries:** Mongoose `lean()` and field projection
 
 ---
 
@@ -263,16 +387,6 @@ Evalio/
 **Health:**
 - `GET /health` - Liveness probe
 - `GET /ready` - Readiness probe (checks DB + Redis)
-
----
-
-## 🧪 Testing Strategy
-
-- **Unit Tests**: Core utilities (scoring, pagination, validation) with 57+ passing tests
-- **Integration Tests**: API endpoints with in-memory test database
-- **ML Contract Validation**: Strict input/output schemas for ML system
-- **Test Coverage**: Focus on critical paths and edge cases
-- **Isolated Test Environment**: Separate test database, mocked external services
 
 ---
 
@@ -368,8 +482,30 @@ For detailed Docker documentation, see [docs/DOCKER.md](docs/DOCKER.md).
 1. **Feature Development**: Work on feature branches
 2. **Testing**: Write unit tests for utilities, integration tests for APIs
 3. **Code Review**: Ensure adherence to patterns and conventions
-4. **Commit Standards**: Use conventional commits (feat, fix, chore, etc.)
+4. **Commit Standards**: Use conventional commits (feat, fix, chore, perf, test, docs)
 5. **Documentation**: Update README and inline comments
+6. **CI/CD Ready**: Docker images, test automation, health checks
+
+---
+
+## 📚 Documentation
+
+- [Architecture Overview](docs/ARCHITECTURE.md) - System design and data flow
+- [Docker Deployment](docs/DOCKER.md) - Container setup and configuration
+- [Docker Verification](docs/DOCKER_VERIFICATION.md) - Deployment test results
+- [Retry Safety](docs/RETRY_SAFETY.md) - Idempotency and error handling
+- [Test Suite](tests/README.md) - Testing strategy and coverage
+
+---
+
+## 📊 Project Statistics
+
+- **Backend Code:** ~15,000 lines (Node.js/Express)
+- **Test Coverage:** 133 automated tests (73 unit + 60 integration)
+- **Docker Images:** 2 optimized containers (backend 333MB, worker 1.58GB)
+- **API Endpoints:** 25+ RESTful routes with comprehensive validation
+- **Database Models:** 8 Mongoose schemas with optimized indexes
+- **Documentation:** 5 comprehensive guides (4,000+ words)
 
 ---
 
@@ -383,13 +519,23 @@ This project is created for educational and portfolio purposes.
 
 **Rashid**
 - GitHub: [@source-rashi](https://github.com/source-rashi)
-- Project: Resume & Interview Ready
+- Project: Production-Ready Full-Stack Application
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Built as a demonstration of full-stack architecture
-- Showcases Node.js, React, MongoDB, Redis, Python ML integration
-- Implements production-grade patterns: async processing, audit trails, override workflows
-- Designed for scalability, maintainability, and testability
+Built as a comprehensive demonstration of modern full-stack architecture:
+
+- ✅ **Backend Excellence:** Node.js/Express with async job processing, structured logging, comprehensive error handling
+- ✅ **Testing Maturity:** 133 automated tests with isolated test environment and cross-platform support
+- ✅ **Performance Optimization:** Database indexing, pagination, payload trimming, efficient queries
+- ✅ **Security Hardening:** JWT authentication, rate limiting, input validation, container security
+- ✅ **DevOps Ready:** Docker containerization, health checks, environment-driven config, production logging
+- ✅ **ML Integration:** Python subprocess orchestration, contract validation, async processing
+- ✅ **Documentation:** Comprehensive guides for architecture, deployment, testing, and troubleshooting
+
+**Technologies Showcased:**
+- Node.js 20, Express, MongoDB 7, Redis 7, BullMQ, Jest, Docker, Python, scikit-learn
+- Production patterns: Async queues, audit trails, override workflows, health monitoring
+- Designed for scalability, maintainability, testability, and deployability
