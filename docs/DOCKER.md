@@ -298,6 +298,62 @@ docker exec evalio-backend node --expose-gc -e "require('v8').writeHeapSnapshot(
     docker push your-registry/evalio-backend:latest
 ```
 
+## Docker Compose (Recommended)
+
+For the full stack with MongoDB and Redis:
+
+### 1. Set up environment variables
+
+```bash
+cp .env.docker .env
+# Edit .env and fill in your values
+```
+
+### 2. Start all services
+
+```bash
+docker-compose up -d
+```
+
+### 3. View logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f backend
+docker-compose logs -f worker
+```
+
+### 4. Stop services
+
+```bash
+docker-compose down
+```
+
+### 5. Stop and remove volumes (⚠️ deletes data)
+
+```bash
+docker-compose down -v
+```
+
+## Docker Compose Services
+
+The [docker-compose.yml](../docker-compose.yml) includes:
+
+- **mongodb** - MongoDB 7.0 with persistent volumes
+- **redis** - Redis 7 with append-only file persistence
+- **backend** - Evalio API server (port 5000)
+- **worker** - Background evaluation processor
+
+All services include:
+- ✅ Health checks
+- ✅ Auto-restart policies
+- ✅ Proper dependency ordering
+- ✅ Named volumes for data persistence
+- ✅ Private network isolation
+
 ## Next Steps
 
 After building the Docker images:

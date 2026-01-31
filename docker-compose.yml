@@ -1,0 +1,170 @@
+# ============================================
+# Docker Compose for Evalio Production Stack
+# ============================================
+version: '3.8'
+
+services:
+  # ==========================================
+  # MongoDB Database
+  # ==========================================
+  mongodb:
+    image: mongo:7.0
+    container_name: evalio-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
+      MONGO_INITDB_DATABASE: evalio
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - evalio-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================
+  # Redis Cache & Queue
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: evalio-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - evalio-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ==========================================
+  # Backend API Server
+  # ==========================================
+  backend:
+    image: evalio-backend:latest
+    container_name: evalio-backend
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-5000}
+      
+      # Database
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/evalio?authSource=admin
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      
+      # Authentication
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRY: ${JWT_EXPIRY:-7d}
+      
+      # Cloudinary
+      CLOUDINARY_URL: ${CLOUDINARY_URL}
+      
+      # AI Provider
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      
+      # Rate Limiting
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+    ports:
+      - "${PORT:-5000}:5000"
+    networks:
+      - evalio-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.evalio.service=backend"
+      - "com.evalio.environment=production"
+
+  # ==========================================
+  # Evaluation Worker (Background Jobs)
+  # ==========================================
+  worker:
+    image: evalio-worker:latest
+    container_name: evalio-worker
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      
+      # Database
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/evalio?authSource=admin
+      
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      
+      # AI Provider
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      
+      # Worker Configuration
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+    networks:
+      - evalio-network
+    labels:
+      - "com.evalio.service=worker"
+      - "com.evalio.environment=production"
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  evalio-network:
+    driver: bridge
+    name: evalio-network
+
+# ==========================================
+# Volumes (Persistent Data)
+# ==========================================
+volumes:
+  mongodb_data:
+    name: evalio-mongodb-data
+  mongodb_config:
+    name: evalio-mongodb-config
+  redis_data:
+    name: evalio-redis-data
