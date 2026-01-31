@@ -158,8 +158,10 @@ const EvaluationSchema = new mongoose.Schema({
   
 }, { timestamps: true });
 
-// Index for efficient queries
-EvaluationSchema.index({ submission_id: 1, status: 1 });
+// Indexes for efficient queries
+EvaluationSchema.index({ submission_id: 1 });  // Lookup evaluations by submission
+EvaluationSchema.index({ status: 1 });  // Filter by evaluation status (pending, completed, etc.)
+EvaluationSchema.index({ submission_id: 1, status: 1 });  // Combined queries
 
 // Virtual: Check if any results were overridden
 EvaluationSchema.virtual('hasOverrides').get(function() {
