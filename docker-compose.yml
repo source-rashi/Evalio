@@ -150,6 +150,30 @@ services:
       - "com.evalio.service=worker"
       - "com.evalio.environment=production"
 
+  # ==========================================
+  # Frontend (React + Nginx)
+  # ==========================================
+  frontend:
+    image: evalio-frontend:latest
+    container_name: evalio-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - evalio-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "com.evalio.service=frontend"
+      - "com.evalio.environment=production"
+
 # ==========================================
 # Networks
 # ==========================================
