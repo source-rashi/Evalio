@@ -39,11 +39,11 @@ export default function Landing() {
           Evalio automates exam evaluation with AI-powered grading, handwriting recognition, and detailed performance analytics — saving you hours and improving learning outcomes.
         </p>
         <div className="mt-8 flex items-center justify-center gap-4">
-          <Link className="bg-primary hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-shadow" to="/signup">
+          <Link className="bg-primary hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-shadow" to="/signup/teacher">
             Get Started (for Teachers)
           </Link>
-          <Link className="border border-gray-300 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50" to="/demo">
-            Explore Demo (for Students)
+          <Link className="border border-gray-300 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50" to="/signup/student">
+            Get Started (for Students)
           </Link>
         </div>
       </section>

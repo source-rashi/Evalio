@@ -9,7 +9,8 @@ export default function Login() {
   useEffect(() => {
     if (isSignedIn && user) {
       // Check user's role from metadata and redirect accordingly
-      const role = user.publicMetadata?.role || 'student';
+      // Try unsafeMetadata first (set during signup), then publicMetadata, then default to teacher
+      const role = user.unsafeMetadata?.role || user.publicMetadata?.role || 'teacher';
       localStorage.setItem('role', role);
       navigate(role === 'teacher' ? '/teacher' : '/student');
     }
@@ -18,11 +19,14 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center px-4">
       <div className="bg-white rounded-xl border p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-text-primary">Welcome back</h2>
+          <p className="text-sm text-text-secondary mt-1">Sign in to your Evalio account</p>
+        </div>
         <SignIn 
           routing="path" 
           path="/login"
           signUpUrl="/signup"
-          afterSignInUrl="/teacher"
         />
       </div>
     </div>

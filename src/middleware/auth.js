@@ -29,11 +29,12 @@ async function auth(req, res, next) {
     const user = await clerkClient.users.getUser(verified.sub);
     
     // Attach user info to request
+    // Check publicMetadata first (admin-set), then unsafeMetadata (user-set), default to student
     req.user = {
       id: user.id,
       userId: user.id,
       email: user.emailAddresses?.[0]?.emailAddress,
-      role: user.publicMetadata?.role || 'student'
+      role: user.publicMetadata?.role || user.unsafeMetadata?.role || 'student'
     };
     
     next();

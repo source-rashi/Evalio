@@ -6,6 +6,8 @@ import App from './App';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import SignupTeacher from './pages/SignupTeacher';
+import SignupStudent from './pages/SignupStudent';
 import TeacherDashboard from './pages/TeacherDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import './index.css';
@@ -24,6 +26,8 @@ root.render(
 				<Route path="/" element={<Landing />} />
 				<Route path="/login" element={<Login />} />
 				<Route path="/signup" element={<Signup />} />
+				<Route path="/signup/teacher" element={<SignupTeacher />} />
+				<Route path="/signup/student" element={<SignupStudent />} />
 				<Route path="/teacher" element={<TeacherDashboard />} />
 				<Route path="/student" element={<StudentDashboard />} />
 				<Route path="/app" element={<App />} />

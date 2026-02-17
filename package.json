@@ -13,6 +13,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@clerk/backend": "^2.31.0",
     "@clerk/express": "^1.7.70",
     "@google-cloud/vision": "^5.3.4",
     "@google/generative-ai": "^0.24.1",
