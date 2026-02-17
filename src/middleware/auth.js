@@ -1,11 +1,10 @@
-const jwt = require('jsonwebtoken');
+const { clerkClient } = require('@clerk/express');
 
 /**
  * Authentication middleware
- * Verifies JWT token and attaches user info to request
- * Supports both legacy (id) and new (userId) token formats
+ * Verifies Clerk JWT token and attaches user info to request
  */
-module.exports = function auth(req, res, next) {
+async function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   
@@ -14,18 +13,35 @@ module.exports = function auth(req, res, next) {
   }
   
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'devsecret');
+    // Verify the Clerk session token
+    const sessionToken = token;
     
-    // Support both legacy and new token formats
+    // Use Clerk's backend API to verify the token
+    const client = clerkClient();
+    const response = await client.verifyToken(sessionToken, {
+      secretKey: process.env.CLERK_SECRET_KEY
+    });
+    
+    if (!response || !response.sub) {
+      return res.status(401).json({ ok: false, error: 'Invalid token' });
+    }
+    
+    // Get user details from Clerk
+    const user = await client.users.getUser(response.sub);
+    
+    // Attach user info to request
     req.user = {
-      id: decoded.userId || decoded.id,  // Backward compatible
-      userId: decoded.userId || decoded.id,
-      email: decoded.email,
-      role: decoded.role  // Now available for RBAC
+      id: user.id,
+      userId: user.id,
+      email: user.emailAddresses?.[0]?.emailAddress,
+      role: user.publicMetadata?.role || 'student'
     };
     
     next();
   } catch (err) {
+    console.error('Auth error:', err);
     return res.status(401).json({ ok: false, error: 'Invalid token' });
   }
 }
+
+module.exports = auth;

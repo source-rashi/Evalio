@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { BookOpen, TrendingUp, MessageSquare, LogOut, Upload, FileText, CheckCircle, Clock, Save } from 'lucide-react';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -7,9 +8,12 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState('home');
   const navigate = useNavigate();
+  const { getToken, signOut, isLoaded } = useAuth();
+  const { user } = useUser();
   
   // User state
-  const [studentId] = useState(localStorage.getItem('userId') || '');
+  const [studentId, setStudentId] = useState('');
+  const [token, setToken] = useState('');
   
   // Exam state
   const [exams, setExams] = useState([]);
@@ -29,16 +33,29 @@ export default function StudentDashboard() {
   // Autosave timers
   const saveTimersRef = useRef({});
 
+  // Get Clerk session token
   useEffect(() => {
-    listExams();
+    async function fetchToken() {
+      if (isLoaded && user) {
+        const tkn = await getToken();
+        setToken(tkn || '');
+        setStudentId(user.id);
+      }
+    }
+    fetchToken();
+  }, [getToken, isLoaded, user]);
+
+  useEffect(() => {
+    if (token) listExams();
     return () => {
       const timers = saveTimersRef.current;
       Object.values(timers).forEach(t => clearTimeout(t));
     };
-  }, []);
+  }, [token]);
 
-  function handleLogout() {
-    localStorage.removeItem('token');
+  async function handleLogout() {
+    await signOut();
+    localStorage.removeItem('role');
     navigate('/login');
   }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth, useUser } from '@clerk/clerk-react';
 import { LayoutDashboard, FileText, Users, BarChart3, LogOut, HelpCircle, Plus, Eye, Trash2, Edit, CheckCircle } from 'lucide-react';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -7,7 +8,9 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
-  const [token] = useState(localStorage.getItem('token') || '');
+  const { getToken, signOut, isLoaded } = useAuth();
+  const { user } = useUser();
+  const [token, setToken] = useState('');
   
   // Exam state
   const [examTitle, setExamTitle] = useState('');
@@ -35,6 +38,17 @@ export default function TeacherDashboard() {
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
+  // Get Clerk session token
+  useEffect(() => {
+    async function fetchToken() {
+      if (isLoaded) {
+        const tkn = await getToken();
+        setToken(tkn || '');
+      }
+    }
+    fetchToken();
+  }, [getToken, isLoaded]);
+
   // Load exams on mount
   useEffect(() => {
     if (token) listExams();
@@ -45,8 +59,9 @@ export default function TeacherDashboard() {
     if (token) loadSubmissions();
   }, [selectedExam, token]);
 
-  function handleLogout() {
-    localStorage.removeItem('token');
+  async function handleLogout() {
+    await signOut();
+    localStorage.removeItem('role');
     navigate('/login');
   }
 

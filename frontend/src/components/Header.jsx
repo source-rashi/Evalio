@@ -1,7 +1,9 @@
 import React from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { BookOpen, GraduationCap, LogOut, UserCircle2 } from 'lucide-react';
 
 export default function Header({ token, onLogout }) {
+  const { user, isSignedIn } = useUser();
   return (
     <div className="sticky top-0 z-20 border-b bg-white/80 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -17,10 +19,13 @@ export default function Header({ token, onLogout }) {
             <BookOpen size={16} /> Docs
           </a>
           <div className="w-px h-6 bg-gray-200" />
-          {token ? (
-            <button onClick={onLogout} className="inline-flex items-center gap-1 text-sm text-white bg-primary hover:bg-indigo-600 px-3 py-2 rounded-lg">
-              <LogOut size={16} /> Logout
-            </button>
+          {isSignedIn ? (
+            <>
+              <span className="text-sm text-text-secondary hidden sm:inline">{user?.emailAddresses?.[0]?.emailAddress}</span>
+              <button onClick={onLogout} className="inline-flex items-center gap-1 text-sm text-white bg-primary hover:bg-indigo-600 px-3 py-2 rounded-lg">
+                <LogOut size={16} /> Logout
+              </button>
+            </>
           ) : (
             <div className="inline-flex items-center gap-2 text-text-secondary">
               <UserCircle2 size={18} /> Guest
