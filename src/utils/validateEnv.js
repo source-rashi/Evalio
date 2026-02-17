@@ -17,9 +17,9 @@ const REQUIRED_ENV_VARS = [
     example: 'mongodb://localhost:27017/evalio'
   },
   {
-    name: 'JWT_SECRET',
-    description: 'Secret key for JWT token signing',
-    example: 'your-secret-key-here',
+    name: 'CLERK_SECRET_KEY',
+    description: 'Clerk secret key for authentication',
+    example: 'sk_test_your_clerk_secret_key',
     minLength: 32
   }
 ];
