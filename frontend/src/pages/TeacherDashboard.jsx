@@ -8,7 +8,7 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
-  const { getToken, signOut, isLoaded } = useAuth();
+  const { getToken, signOut, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const [token, setToken] = useState('');
   
@@ -38,16 +38,28 @@ export default function TeacherDashboard() {
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
+  // Redirect if not signed in
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      navigate('/login');
+    }
+  }, [isLoaded, isSignedIn, navigate]);
+
   // Get Clerk session token
   useEffect(() => {
     async function fetchToken() {
-      if (isLoaded) {
-        const tkn = await getToken();
-        setToken(tkn || '');
+      if (isLoaded && isSignedIn) {
+        try {
+          const tkn = await getToken();
+          console.log('Token fetched:', tkn ? 'Token received' : 'No token');
+          setToken(tkn || '');
+        } catch (error) {
+          console.error('Error fetching token:', error);
+        }
       }
     }
     fetchToken();
-  }, [getToken, isLoaded]);
+  }, [getToken, isLoaded, isSignedIn]);
 
   // Load exams on mount
   useEffect(() => {

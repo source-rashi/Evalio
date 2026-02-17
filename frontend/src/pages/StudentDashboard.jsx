@@ -8,7 +8,7 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState('home');
   const navigate = useNavigate();
-  const { getToken, signOut, isLoaded } = useAuth();
+  const { getToken, signOut, isLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   
   // User state
@@ -33,17 +33,29 @@ export default function StudentDashboard() {
   // Autosave timers
   const saveTimersRef = useRef({});
 
+  // Redirect if not signed in
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      navigate('/login');
+    }
+  }, [isLoaded, isSignedIn, navigate]);
+
   // Get Clerk session token
   useEffect(() => {
     async function fetchToken() {
-      if (isLoaded && user) {
-        const tkn = await getToken();
-        setToken(tkn || '');
-        setStudentId(user.id);
+      if (isLoaded && isSignedIn && user) {
+        try {
+          const tkn = await getToken();
+          console.log('Student token fetched:', tkn ? 'Token received' : 'No token');
+          setToken(tkn || '');
+          setStudentId(user.id);
+        } catch (error) {
+          console.error('Error fetching token:', error);
+        }
       }
     }
     fetchToken();
-  }, [getToken, isLoaded, user]);
+  }, [getToken, isLoaded, isSignedIn, user]);
 
   useEffect(() => {
     if (token) listExams();
