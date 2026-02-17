@@ -19,7 +19,7 @@ if (!clerkPubKey) {
 const root = createRoot(document.getElementById('root'));
 root.render(
 	<ClerkProvider publishableKey={clerkPubKey}>
-		<BrowserRouter>
+		<BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
 			<Routes>
 				<Route path="/" element={<Landing />} />
 				<Route path="/login" element={<Login />} />

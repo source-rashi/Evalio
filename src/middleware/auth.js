@@ -1,4 +1,9 @@
-const { clerkClient } = require('@clerk/express');
+const { createClerkClient } = require('@clerk/backend');
+
+// Initialize Clerk client with secret key
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY
+});
 
 /**
  * Authentication middleware
@@ -14,20 +19,14 @@ async function auth(req, res, next) {
   
   try {
     // Verify the Clerk session token
-    const sessionToken = token;
+    const verified = await clerkClient.verifyToken(token);
     
-    // Use Clerk's backend API to verify the token
-    const client = clerkClient();
-    const response = await client.verifyToken(sessionToken, {
-      secretKey: process.env.CLERK_SECRET_KEY
-    });
-    
-    if (!response || !response.sub) {
+    if (!verified || !verified.sub) {
       return res.status(401).json({ ok: false, error: 'Invalid token' });
     }
     
     // Get user details from Clerk
-    const user = await client.users.getUser(response.sub);
+    const user = await clerkClient.users.getUser(verified.sub);
     
     // Attach user info to request
     req.user = {
@@ -39,7 +38,7 @@ async function auth(req, res, next) {
     
     next();
   } catch (err) {
-    console.error('Auth error:', err);
+    console.error('Auth error:', err.message || err);
     return res.status(401).json({ ok: false, error: 'Invalid token' });
   }
 }
