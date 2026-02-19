@@ -9,8 +9,8 @@ const AnswerSchema = new mongoose.Schema({
 
 const SubmissionSchema = new mongoose.Schema({
   student_id: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Student',
+    type: String,  // Clerk user ID
+    required: true,
     index: true  // Optimize queries filtering by student
   },
   exam_id: { 

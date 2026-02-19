@@ -4,12 +4,12 @@ const ExamSchema = new mongoose.Schema({
   title: String,
   subject: String,
   teacher_id: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Teacher',
+    type: String,  // Clerk user ID
+    required: true,
     index: true  // Optimize queries filtering by teacher
   },
   questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
-  assignedStudents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
+  assignedStudents: [{ type: String }],  // Array of Clerk user IDs
   isPublic: { 
     type: Boolean, 
     default: true,

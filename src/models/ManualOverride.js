@@ -71,8 +71,7 @@ const ManualOverrideSchema = new mongoose.Schema({
   
   // Teacher who made the override (for accountability)
   teacherId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: String,  // Clerk user ID
     required: true,
     index: true
   },
