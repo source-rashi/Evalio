@@ -23,12 +23,14 @@ export default function SignupTeacher() {
           <p className="text-sm text-text-secondary mt-1">Create your teacher account to start evaluating exams</p>
         </div>
         <SignUp 
-          routing="path" 
-          path="/signup/teacher"
+          routing="virtual"
           signInUrl="/login"
           afterSignUpUrl="/teacher"
-          publicMetadata={{
-            role: 'teacher'
+          appearance={{
+            elements: {
+              rootBox: 'w-full',
+              card: 'shadow-none'
+            }
           }}
         />
       </div>

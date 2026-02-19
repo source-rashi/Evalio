@@ -52,7 +52,6 @@ def evaluate_answer(input_data: dict, mode: str = 'hybrid') -> dict:
         rubric_scorer = create_default_scorer()
         rubric_result = rubric_scorer.score_answer(student_answer, model_answer, rubric)
         rubric_result['confidence'] = 1.0
-        
         # 2. Calculate similarity score
         similarity_scorer = create_default_similarity_scorer()
         similarity_result = similarity_scorer.calculate_similarity(student_answer, model_answer)

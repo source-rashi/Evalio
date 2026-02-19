@@ -24,9 +24,14 @@ export default function Login() {
           <p className="text-sm text-text-secondary mt-1">Sign in to your Evalio account</p>
         </div>
         <SignIn 
-          routing="path" 
-          path="/login"
+          routing="virtual"
           signUpUrl="/signup"
+          appearance={{
+            elements: {
+              rootBox: 'w-full',
+              card: 'shadow-none'
+            }
+          }}
         />
       </div>
     </div>

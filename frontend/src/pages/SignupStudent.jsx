@@ -23,12 +23,14 @@ export default function SignupStudent() {
           <p className="text-sm text-text-secondary mt-1">Create your student account to take exams</p>
         </div>
         <SignUp 
-          routing="path" 
-          path="/signup/student"
+          routing="virtual"
           signInUrl="/login"
           afterSignUpUrl="/student"
-          publicMetadata={{
-            role: 'student'
+          appearance={{
+            elements: {
+              rootBox: 'w-full',
+              card: 'shadow-none'
+            }
           }}
         />
       </div>
