@@ -40,22 +40,40 @@ export default function StudentDashboard() {
     }
   }, [isLoaded, isSignedIn, navigate]);
 
-  // Get Clerk session token
+  // Ensure user role is set and get token
   useEffect(() => {
-    async function fetchToken() {
+    async function setupUserAndToken() {
       if (isLoaded && isSignedIn && user) {
         try {
+          // Check if role is already set
+          const currentRole = user.unsafeMetadata?.role || user.publicMetadata?.role;
+          
+          if (!currentRole || currentRole !== 'student') {
+            console.log('Setting student role in user metadata...');
+            await user.update({
+              unsafeMetadata: {
+                ...user.unsafeMetadata,
+                role: 'student'
+              }
+            });
+            console.log('Student role set successfully');
+            // Wait a moment for Clerk to process the update
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          localStorage.setItem('role', 'student');
+          
+          // Now get the token after role is confirmed
           const tkn = await getToken();
           console.log('Student token fetched:', tkn ? 'Token received' : 'No token');
           setToken(tkn || '');
           setStudentId(user.id);
         } catch (error) {
-          console.error('Error fetching token:', error);
+          console.error('Error setting user role or fetching token:', error);
         }
       }
     }
-    fetchToken();
-  }, [getToken, isLoaded, isSignedIn, user]);
+    setupUserAndToken();
+  }, [isLoaded, isSignedIn, user, getToken]);
 
   useEffect(() => {
     if (token) listExams();

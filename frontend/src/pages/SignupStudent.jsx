@@ -7,12 +7,27 @@ export default function SignupStudent() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isSignedIn && user) {
-      // Store role as student
-      localStorage.setItem('role', 'student');
-      // Redirect to student dashboard
-      navigate('/student');
+    async function setupUser() {
+      if (isSignedIn && user) {
+        try {
+          // Update user metadata with role
+          await user.update({
+            unsafeMetadata: {
+              ...user.unsafeMetadata,
+              role: 'student'
+            }
+          });
+          localStorage.setItem('role', 'student');
+          // Redirect to student dashboard
+          navigate('/student');
+        } catch (error) {
+          console.error('Error setting user role:', error);
+          // Still navigate even if metadata update fails
+          navigate('/student');
+        }
+      }
     }
+    setupUser();
   }, [isSignedIn, user, navigate]);
 
   return (

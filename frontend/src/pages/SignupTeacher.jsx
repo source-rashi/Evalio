@@ -7,12 +7,27 @@ export default function SignupTeacher() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isSignedIn && user) {
-      // Store role as teacher
-      localStorage.setItem('role', 'teacher');
-      // Redirect to teacher dashboard
-      navigate('/teacher');
+    async function setupUser() {
+      if (isSignedIn && user) {
+        try {
+          // Update user metadata with role
+          await user.update({
+            unsafeMetadata: {
+              ...user.unsafeMetadata,
+              role: 'teacher'
+            }
+          });
+          localStorage.setItem('role', 'teacher');
+          // Redirect to teacher dashboard
+          navigate('/teacher');
+        } catch (error) {
+          console.error('Error setting user role:', error);
+          // Still navigate even if metadata update fails
+          navigate('/teacher');
+        }
+      }
     }
+    setupUser();
   }, [isSignedIn, user, navigate]);
 
   return (
