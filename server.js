@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
+const { clerkMiddleware } = require('@clerk/express');
 const logger = require('./src/utils/logger');
 const correlationIdMiddleware = require('./src/middleware/correlationId');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
@@ -29,6 +30,9 @@ function buildCorsOrigin() {
 }
 app.use(cors({ origin: buildCorsOrigin() }));
 app.use(express.json());
+
+// Clerk middleware - must be before routes that use auth
+app.use(clerkMiddleware());
 
 // Correlation ID middleware - must be before routes
 app.use(correlationIdMiddleware);

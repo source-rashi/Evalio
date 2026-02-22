@@ -1,43 +1,24 @@
-const { createClerkClient, verifyToken } = require('@clerk/backend');
-
-// Initialize Clerk client with secret key
-const clerkClient = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY
-});
+const { clerkClient, getAuth } = require('@clerk/express');
 
 /**
  * Authentication middleware
  * Verifies Clerk JWT token and attaches user info to request
  */
 async function auth(req, res, next) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  
-  console.log('Auth middleware - Authorization header present:', !!header);
-  console.log('Auth middleware - Token extracted:', token ? 'Yes' : 'No');
-  
-  if (!token) {
-    console.log('Auth middleware - No token provided');
-    return res.status(401).json({ ok: false, error: 'Missing token' });
-  }
-  
   try {
-    // Verify the Clerk session token using standalone verifyToken
-    console.log('Auth middleware - Attempting to verify token...');
-    const verified = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY
-    });
+    // Get auth from Clerk middleware
+    const auth = getAuth(req);
     
-    console.log('Auth middleware - Token verified, sub:', verified?.sub);
+    console.log('Auth middleware - User ID from Clerk:', auth?.userId);
     
-    if (!verified || !verified.sub) {
-      console.log('Auth middleware - Token verification failed');
-      return res.status(401).json({ ok: false, error: 'Invalid token' });
+    if (!auth || !auth.userId) {
+      console.log('Auth middleware - No authenticated user');
+      return res.status(401).json({ ok: false, error: 'Unauthorized - Please sign in' });
     }
     
     // Get user details from Clerk
     console.log('Auth middleware - Fetching user details...');
-    const user = await clerkClient.users.getUser(verified.sub);
+    const user = await clerkClient.users.getUser(auth.userId);
     
     console.log('Auth middleware - User retrieved:', user.id, 'Email:', user.emailAddresses?.[0]?.emailAddress);
     
@@ -56,7 +37,7 @@ async function auth(req, res, next) {
   } catch (err) {
     console.error('Auth error:', err.message || err);
     console.error('Auth error stack:', err.stack);
-    return res.status(401).json({ ok: false, error: 'Invalid token' });
+    return res.status(401).json({ ok: false, error: 'Invalid token or authentication failed' });
   }
 }
 
