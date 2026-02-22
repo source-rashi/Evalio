@@ -7,3 +7,12 @@ coverage/
 *.log
 .DS_Store
 /.vscode/
+
+# Local Redis installation
+redis/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
