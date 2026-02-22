@@ -204,6 +204,27 @@ export default function TeacherDashboard() {
     }
   }
 
+  async function toggleExamPublic(examId, e) {
+    e.stopPropagation(); // Prevent selecting the exam when clicking button
+    
+    try {
+      const r = await fetch(`${API}/api/exam/${examId}/toggle-public`, {
+        method: 'PUT',
+        headers: { ...authHeader },
+      });
+      const j = await r.json();
+      
+      if (j.ok) {
+        await listExams(); // Refresh exam list
+        alert(`Exam is now ${j.exam.isPublic ? 'PUBLIC - All students can see it' : 'PRIVATE - Only assigned students can see it'}`);
+      } else {
+        alert(j.error);
+      }
+    } catch (e) {
+      alert('Error toggling exam visibility');
+    }
+  }
+
   async function evaluateSubmission(submissionId) {
     if (!submissionId) return;
     
@@ -435,20 +456,41 @@ export default function TeacherDashboard() {
                     {exams.map(exam => (
                       <div
                         key={exam._id}
-                        className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => {
-                          setSelectedExam(exam._id);
-                          setActiveTab('create');
-                        }}
+                        className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-semibold text-text-primary">{exam.title}</h3>
+                          <div 
+                            className="flex-1 cursor-pointer"
+                            onClick={() => {
+                              setSelectedExam(exam._id);
+                              setActiveTab('create');
+                            }}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-text-primary">{exam.title}</h3>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                exam.isPublic 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {exam.isPublic ? '🌐 Public' : '🔒 Private'}
+                              </span>
+                            </div>
                             <p className="text-sm text-text-secondary">
-                              {exam.questions?.length || 0} questions
+                              {exam.questions?.length || 0} questions • {exam.subject || 'No subject'}
                             </p>
                           </div>
-                          <CheckCircle className="text-secondary" size={20} />
+                          <button
+                            onClick={(e) => toggleExamPublic(exam._id, e)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                              exam.isPublic
+                                ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                : 'bg-green-100 hover:bg-green-200 text-green-700'
+                            }`}
+                            title={exam.isPublic ? 'Click to make private' : 'Click to make public'}
+                          >
+                            {exam.isPublic ? 'Make Private' : 'Publish'}
+                          </button>
                         </div>
                       </div>
                     ))}
