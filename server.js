@@ -31,7 +31,7 @@ function buildCorsOrigin() {
 app.use(cors({ origin: buildCorsOrigin() }));
 app.use(express.json());
 
-// Clerk middleware - must be before routes that use auth
+// Clerk authentication middleware - must be before routes that need auth
 app.use(clerkMiddleware());
 
 // Correlation ID middleware - must be before routes
