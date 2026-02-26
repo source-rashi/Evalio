@@ -364,18 +364,22 @@ export default function TeacherDashboard() {
         headers: { ...authHeader }
       });
       const subData = await subRes.json();
+      console.log('Submission data:', subData);
       
       // Fetch evaluation if exists
       const evalRes = await fetch(`${API}/api/evaluate/${submissionId}`, {
         headers: { ...authHeader }
       });
       const evalData = await evalRes.json();
+      console.log('Evaluation data:', evalData);
       
       // Fetch exam details with questions
-      const examRes = await fetch(`${API}/api/exam/${subData.submission.exam_id}/questions`, {
+      const examId = subData.submission.exam_id?._id || subData.submission.exam_id;
+      const examRes = await fetch(`${API}/api/exam/${examId}/questions`, {
         headers: { ...authHeader }
       });
       const examData = await examRes.json();
+      console.log('Exam questions:', examData);
       
       setSubmissionDetails({
         submission: subData.submission,
