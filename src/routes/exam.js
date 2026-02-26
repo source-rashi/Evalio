@@ -187,4 +187,22 @@ router.get('/:examId/questions', auth, param('examId').isMongoId(), async (req, 
   }
 });
 
+// Get assigned students for an exam
+router.get('/:examId/assigned-students', auth, requireRole(ROLES.TEACHER), param('examId').isMongoId(), async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ ok: false, error: 'Invalid examId' });
+  
+  try {
+    const exam = await Exam.findById(req.params.examId).populate('assignedStudents', 'name email');
+    if (!exam) return res.status(404).json({ ok: false, error: 'Exam not found' });
+    if (String(exam.teacher_id) !== String(req.user.id)) {
+      return res.status(403).json({ ok: false, error: 'Not authorized' });
+    }
+    
+    res.json({ ok: true, assignedStudents: exam.assignedStudents });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 module.exports = router;

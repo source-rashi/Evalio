@@ -54,8 +54,6 @@ router.post('/login', authLimiter,
   }
 );
 
-module.exports = router;
-
 // Get current teacher profile (auth required)
 router.get('/me', auth, async (req, res) => {
   try {
@@ -66,3 +64,17 @@ router.get('/me', auth, async (req, res) => {
     res.status(400).json({ ok: false, error: err.message });
   }
 });
+
+// Get all students (for assigning exams)
+router.get('/students', auth, async (req, res) => {
+  try {
+    const students = await User.find({ role: ROLES.STUDENT })
+      .select('name email createdAt')
+      .sort({ name: 1 });
+    res.json({ ok: true, students });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+module.exports = router;

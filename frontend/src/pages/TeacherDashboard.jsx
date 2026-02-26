@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import { LayoutDashboard, FileText, Users, BarChart3, LogOut, HelpCircle, Plus, Eye, Trash2, Edit, CheckCircle } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, BarChart3, LogOut, HelpCircle, Plus, Eye, Trash2, Edit, CheckCircle, Share2, X, Copy, Link } from 'lucide-react';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -35,6 +35,13 @@ export default function TeacherDashboard() {
   const [viewingSubmission, setViewingSubmission] = useState(null);
   const [submissionDetails, setSubmissionDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Sharing state
+  const [sharingExam, setSharingExam] = useState(null);
+  const [allStudents, setAllStudents] = useState([]);
+  const [assignedStudents, setAssignedStudents] = useState([]);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -246,6 +253,85 @@ export default function TeacherDashboard() {
     } finally {
       setEvaluating(null);
     }
+  }
+
+  async function openShareModal(exam) {
+    setSharingExam(exam);
+    setLoadingStudents(true);
+    try {
+      // Fetch all students
+      const studentsRes = await fetch(`${API}/api/teacher/students`, {
+        headers: { ...authHeader },
+      });
+      const studentsData = await studentsRes.json();
+      if (studentsData.ok) {
+        setAllStudents(studentsData.students);
+      }
+
+      // Fetch assigned students for this exam
+      const assignedRes = await fetch(`${API}/api/exam/${exam._id}/assigned-students`, {
+        headers: { ...authHeader },
+      });
+      const assignedData = await assignedRes.json();
+      if (assignedData.ok) {
+        setAssignedStudents(assignedData.assignedStudents || []);
+        setSelectedStudents(assignedData.assignedStudents.map(s => s._id) || []);
+      }
+    } catch (e) {
+      console.error('Error loading students:', e);
+    } finally {
+      setLoadingStudents(false);
+    }
+  }
+
+  function closeShareModal() {
+    setSharingExam(null);
+    setAllStudents([]);
+    setAssignedStudents([]);
+    setSelectedStudents([]);
+  }
+
+  function toggleStudentSelection(studentId) {
+    setSelectedStudents(prev => {
+      if (prev.includes(studentId)) {
+        return prev.filter(id => id !== studentId);
+      } else {
+        return [...prev, studentId];
+      }
+    });
+  }
+
+  async function assignExam() {
+    if (!sharingExam) return;
+    
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/exam/${sharingExam._id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ studentIds: selectedStudents }),
+      });
+      const j = await r.json();
+      
+      if (j.ok) {
+        alert('Exam assigned successfully!');
+        await listExams();
+        closeShareModal();
+      } else {
+        alert(j.error);
+      }
+    } catch (e) {
+      alert('Error assigning exam');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copyShareLink() {
+    if (!sharingExam) return;
+    const shareUrl = `${window.location.origin}/student-dashboard?exam=${sharingExam._id}`;
+    navigator.clipboard.writeText(shareUrl);
+    alert('Share link copied to clipboard!');
   }
 
   async function loadSubmissions() {
@@ -480,17 +566,30 @@ export default function TeacherDashboard() {
                               {exam.questions?.length || 0} questions • {exam.subject || 'No subject'}
                             </p>
                           </div>
-                          <button
-                            onClick={(e) => toggleExamPublic(exam._id, e)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              exam.isPublic
-                                ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                                : 'bg-green-100 hover:bg-green-200 text-green-700'
-                            }`}
-                            title={exam.isPublic ? 'Click to make private' : 'Click to make public'}
-                          >
-                            {exam.isPublic ? 'Make Private' : 'Publish'}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openShareModal(exam);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                              title="Share exam with students"
+                            >
+                              <Share2 size={16} />
+                              Share
+                            </button>
+                            <button
+                              onClick={(e) => toggleExamPublic(exam._id, e)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                                exam.isPublic
+                                  ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                  : 'bg-green-100 hover:bg-green-200 text-green-700'
+                              }`}
+                              title={exam.isPublic ? 'Click to make private' : 'Click to make public'}
+                            >
+                              {exam.isPublic ? 'Make Private' : 'Publish'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1144,6 +1243,140 @@ export default function TeacherDashboard() {
           )}
         </div>
       </main>
+
+      {/* Share Modal */}
+      {sharingExam && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
+              <h2 className="font-heading font-semibold text-xl text-text-primary">
+                Share Exam: {sharingExam.title}
+              </h2>
+              <button
+                onClick={closeShareModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Public/Private Toggle */}
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h3 className="font-semibold text-text-primary">Visibility</h3>
+                    <p className="text-sm text-text-secondary mt-1">
+                      {sharingExam.isPublic 
+                        ? 'This exam is public - all students can see it' 
+                        : 'This exam is private - only assigned students can see it'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      toggleExamPublic(sharingExam._id, e);
+                      closeShareModal();
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      sharingExam.isPublic
+                        ? 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                        : 'bg-green-100 hover:bg-green-200 text-green-700'
+                    }`}
+                  >
+                    {sharingExam.isPublic ? 'Make Private' : 'Make Public'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Shareable Link */}
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Link size={18} className="text-primary" />
+                  <h3 className="font-semibold text-text-primary">Shareable Link</h3>
+                </div>
+                <p className="text-sm text-text-secondary mb-3">
+                  Copy this link to share with students:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/student-dashboard?exam=${sharingExam._id}`}
+                    className="flex-1 px-3 py-2 border rounded-lg bg-gray-50 text-sm"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-indigo-600 transition-colors"
+                  >
+                    <Copy size={16} />
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              {/* Assign to Specific Students */}
+              <div className="border rounded-lg">
+                <div className="p-4 border-b bg-gray-50">
+                  <h3 className="font-semibold text-text-primary">Assign to Specific Students</h3>
+                  <p className="text-sm text-text-secondary mt-1">
+                    Select students who should have access to this exam
+                  </p>
+                </div>
+                
+                <div className="p-4">
+                  {loadingStudents ? (
+                    <div className="text-center py-8 text-text-secondary">
+                      Loading students...
+                    </div>
+                  ) : allStudents.length === 0 ? (
+                    <div className="text-center py-8 text-text-secondary">
+                      No students registered yet
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {allStudents.map(student => (
+                        <label
+                          key={student._id}
+                          className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student._id)}
+                            onChange={() => toggleStudentSelection(student._id)}
+                            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-text-primary">{student.name}</div>
+                            <div className="text-sm text-text-secondary">{student.email}</div>
+                          </div>
+                          {assignedStudents.some(s => s._id === student._id) && (
+                            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                              Assigned
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
+                  <div className="text-sm text-text-secondary">
+                    {selectedStudents.length} student(s) selected
+                  </div>
+                  <button
+                    onClick={assignExam}
+                    disabled={loading || selectedStudents.length === 0}
+                    className="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {loading ? 'Assigning...' : 'Assign Exam'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
