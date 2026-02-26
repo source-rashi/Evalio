@@ -20,7 +20,7 @@ const { asyncHandler, ValidationError, NotFoundError, ConflictError } = require(
 // const { validateAndSanitize } = require('../validators/mlResultValidator');
 
 // Get evaluation for a submission
-router.get('/:submissionId', param('submissionId').isMongoId(), asyncHandler(async (req, res) => {
+router.get('/:submissionId', auth, param('submissionId').isMongoId(), asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     throw new ValidationError('Invalid submissionId', errors.array());

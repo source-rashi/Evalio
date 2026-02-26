@@ -5,9 +5,10 @@ const upload = multer();
 const { ocrLimiter } = require('../middleware/rateLimit');
 const { uploadBuffer } = require('../services/cloudinary');
 const { extractTextFromImageWithGemini } = require('../services/gemini-ocr');
+const auth = require('../middleware/auth');
 
 // POST /api/ocr/extract  (multipart/form-data: file)
-router.post('/extract', ocrLimiter, upload.single('file'), async (req, res) => {
+router.post('/extract', auth, ocrLimiter, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
     

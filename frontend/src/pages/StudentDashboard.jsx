@@ -33,6 +33,8 @@ export default function StudentDashboard() {
   // Autosave timers
   const saveTimersRef = useRef({});
 
+  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
   // Redirect if not signed in
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
@@ -94,7 +96,9 @@ export default function StudentDashboard() {
       const url = studentId 
         ? `${API}/api/exam/student/list?studentId=${studentId}`
         : `${API}/api/exam/student/list`;
-      const r = await fetch(url);
+      const r = await fetch(url, {
+        headers: { ...authHeader }
+      });
       const j = await r.json();
       if (j.ok) setExams(j.exams);
     } catch (e) {
@@ -111,7 +115,7 @@ export default function StudentDashboard() {
     try {
       const r = await fetch(`${API}/api/draft/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({ exam_id: selectedExam, student_id: studentId }),
       });
       const j = await r.json();
@@ -145,6 +149,7 @@ export default function StudentDashboard() {
       
       const r = await fetch(`${API}/api/ocr/extract`, {
         method: 'POST',
+        headers: { ...authHeader },
         body: formData,
       });
       const j = await r.json();
@@ -180,7 +185,7 @@ export default function StudentDashboard() {
     try {
       const r = await fetch(`${API}/api/draft/${submissionId}/answer`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify(payload),
       });
       const j = await r.json();
@@ -217,6 +222,7 @@ export default function StudentDashboard() {
     try {
       const r = await fetch(`${API}/api/draft/${submissionId}/finalize`, {
         method: 'POST',
+        headers: { ...authHeader },
       });
       const j = await r.json();
       
@@ -239,7 +245,9 @@ export default function StudentDashboard() {
     if (!submissionId) return;
     
     try {
-      const r = await fetch(`${API}/api/evaluate/${submissionId}`);
+      const r = await fetch(`${API}/api/evaluate/${submissionId}`, {
+        headers: { ...authHeader }
+      });
       const j = await r.json();
       
       if (j.ok && j.evaluation) {
