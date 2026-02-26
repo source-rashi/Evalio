@@ -154,6 +154,7 @@ export default function TeacherDashboard() {
       
       const r = await fetch(`${API}/api/ocr/extract`, {
         method: 'POST',
+        headers: { ...authHeader },
         body: formData,
       });
       const j = await r.json();
@@ -239,6 +240,7 @@ export default function TeacherDashboard() {
     try {
       const r = await fetch(`${API}/api/evaluate/${submissionId}`, {
         method: 'POST',
+        headers: { ...authHeader },
       });
       const j = await r.json();
       
@@ -358,11 +360,15 @@ export default function TeacherDashboard() {
     setLoadingDetails(true);
     try {
       // Fetch submission details
-      const subRes = await fetch(`${API}/api/submission/${submissionId}`);
+      const subRes = await fetch(`${API}/api/submission/${submissionId}`, {
+        headers: { ...authHeader }
+      });
       const subData = await subRes.json();
       
       // Fetch evaluation if exists
-      const evalRes = await fetch(`${API}/api/evaluate/${submissionId}`);
+      const evalRes = await fetch(`${API}/api/evaluate/${submissionId}`, {
+        headers: { ...authHeader }
+      });
       const evalData = await evalRes.json();
       
       // Fetch exam details with questions
