@@ -16,6 +16,8 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
     const { examId } = req.query;
     const { page, limit, skip } = getPaginationParams(req);
     
+    console.log('Fetching submissions for teacher:', req.user.id, 'examId:', examId);
+    
     let query = { status: { $in: [SUBMISSION_STATUS.FINALIZED, SUBMISSION_STATUS.EVALUATED] } };
     
     if (examId) {
@@ -32,12 +34,13 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
       query.exam_id = { $in: examIds };
     }
     
+    console.log('Submission query:', JSON.stringify(query));
+    
     // Only show finalized or evaluated submissions (not drafts)
     const [subs, total] = await Promise.all([
       Submission.find(query)
         .select('student_id exam_id status createdAt')
-        .populate('student_id', 'name email')
-        .populate('exam_id', 'title subject')
+        .populate('exam_id', 'title subject')  // Only populate exam, not student (Clerk ID)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -53,8 +56,9 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
       id: s._id,
       status: s.status,
       createdAt: s.createdAt,
-      studentName: s.student_id?.name || 'Anonymous',
-      studentEmail: s.student_id?.email || '',
+      studentId: s.student_id,  // Clerk user ID
+      studentName: 'Student',  // TODO: Fetch from Clerk if needed
+      studentEmail: '',  // TODO: Fetch from Clerk if needed
       examTitle: s.exam_id?.title || 'Unknown Exam',
       examSubject: s.exam_id?.subject || '',
       totalScore: evalMap.get(String(s._id))?.totalScore ?? null,
@@ -65,6 +69,7 @@ router.get('/submissions', auth, requireRole(ROLES.TEACHER), async (req, res) =>
     const response = buildPaginationResponse(data, total, page, limit);
     res.json({ ok: true, submissions: response.items, pagination: response.pagination });
   } catch (err) {
+    console.error('Error in /api/teacher/submissions:', err.message, err.stack);
     res.status(400).json({ ok: false, error: err.message });
   }
 });

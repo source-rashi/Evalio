@@ -31,6 +31,8 @@ router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
     const { page, limit, skip } = getPaginationParams(req);
     const query = { teacher_id: req.user.id };
     
+    console.log('Fetching exams for teacher:', req.user.id, 'Query:', query);
+    
     const [exams, total] = await Promise.all([
       Exam.find(query)
         .select('title subject teacher_id isPublic createdAt updatedAt questions')
@@ -41,9 +43,12 @@ router.get('/list', auth, requireRole(ROLES.TEACHER), async (req, res) => {
       Exam.countDocuments(query)
     ]);
     
+    console.log('Found', exams.length, 'exams for teacher');
+    
     const response = buildPaginationResponse(exams, total, page, limit);
     res.json({ ok: true, exams: response.items, pagination: response.pagination });
   } catch (err) {
+    console.error('Error in /api/exam/list:', err.message, err.stack);
     res.status(400).json({ ok: false, error: err.message });
   }
 });

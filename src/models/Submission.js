@@ -9,8 +9,7 @@ const AnswerSchema = new mongoose.Schema({
 
 const SubmissionSchema = new mongoose.Schema({
   student_id: { 
-    type: String,  // Clerk user ID
-    required: true,
+    type: String,  // Changed from ObjectId to String to support Clerk user IDs
     index: true  // Optimize queries filtering by student
   },
   exam_id: { 
